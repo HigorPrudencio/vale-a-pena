@@ -1,0 +1,369 @@
+package com.hjvision.valeapena
+
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.provider.Settings
+import android.text.InputType
+import android.util.TypedValue
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+
+class MainActivity : Activity() {
+
+    private lateinit var status: TextView
+    private lateinit var resultado: TextView
+    private lateinit var diaTexto: TextView
+    private lateinit var historicoTexto: TextView
+    private val campos = LinkedHashMap<String, EditText>()
+    private lateinit var swVoz: Switch
+    private lateinit var swTodos: Switch
+
+    private val corFundo = Color.parseColor("#0F1115")
+    private val corCard = Color.parseColor("#1A1D24")
+    private val corTexto = Color.parseColor("#F2F3F5")
+    private val corMuted = Color.parseColor("#9AA0AB")
+    private val corDestaque = Color.parseColor("#F5A524")
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor = corFundo
+
+        val raiz = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(20), dp(16), dp(32))
+            setBackgroundColor(corFundo)
+        }
+
+        raiz.addView(texto("Vale a Pena", 26f, corTexto, true))
+        raiz.addView(texto("Avisa se a entrega da 99 compensa para a sua moto.", 14f, corMuted, false))
+
+        status = texto("", 15f, corTexto, true)
+        raiz.addView(card(status))
+
+        diaTexto = texto("", 16f, corTexto, true)
+        val diaBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        diaBox.addView(diaTexto)
+        diaBox.addView(texto(
+            "Soma sozinho quando você toca em Aceitar na 99. Os km são os da oferta (coleta + entrega).",
+            12f, corMuted, false
+        ))
+        diaBox.addView(botao("+ Somar última oferta (se não somou)", Color.parseColor("#2A2E38")) {
+            val r = Estado.ultimaOferta
+            when {
+                r == null -> Toast.makeText(this, "Nenhuma oferta lida ainda.", Toast.LENGTH_SHORT).show()
+                Estado.ultimaSomada === r -> Toast.makeText(this, "Essa oferta já foi somada.", Toast.LENGTH_SHORT).show()
+                else -> {
+                    Estado.ultimaSomada = r
+                    Dia.somar(this, r, Config.carregar(this))
+                    Toast.makeText(this, "Somado: ${Analisador.dinheiro(r.valor)}", Toast.LENGTH_SHORT).show()
+                    atualizarStatus()
+                }
+            }
+        })
+        diaBox.addView(botao("Desfazer última entrega (cancelada)", Color.parseColor("#2A2E38")) {
+            if (Dia.desfazer(this)) {
+                Estado.ultimaSomada = null
+                Toast.makeText(this, "Última entrega removida.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Nada para desfazer.", Toast.LENGTH_SHORT).show()
+            }
+            atualizarStatus()
+        })
+        diaBox.addView(botao("Zerar hoje", Color.parseColor("#2A2E38")) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Zerar hoje?")
+                .setMessage("Apaga as entregas somadas hoje. Os outros dias continuam salvos.")
+                .setPositiveButton("Zerar") { _, _ ->
+                    Dia.zerarHoje(this)
+                    atualizarStatus()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        })
+        raiz.addView(card(diaBox))
+
+        historicoTexto = texto("", 14f, corTexto, false)
+        val histBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        histBox.addView(texto("Dias anteriores", 18f, corTexto, true))
+        histBox.addView(historicoTexto)
+        histBox.addView(botao("Copiar histórico (planilha)", Color.parseColor("#2A2E38")) {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("historico", Dia.planilha(this)))
+            Toast.makeText(this, "Copiado. Cole no Google Planilhas ou Excel.", Toast.LENGTH_LONG).show()
+        })
+        raiz.addView(card(histBox))
+
+        raiz.addView(botao("1. Ativar leitor de ofertas", corDestaque) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        })
+        raiz.addView(texto(
+            "Na tela que abrir, entre em \"Apps instalados\" (ou \"Serviços\"), toque em \"Vale a Pena: leitor de ofertas\" e ative.",
+            13f, corMuted, false
+        ))
+        raiz.addView(botao("Liberar uso de bateria", Color.parseColor("#2A2E38")) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        })
+        raiz.addView(texto(
+            "Procure \"Vale a Pena\" e escolha \"Não otimizar\" ou \"Sem restrição\". Sem isso, o celular pode desligar o leitor no meio do dia.",
+            13f, corMuted, false
+        ))
+
+        // Ajustes
+        val cfg = Config.carregar(this)
+        val ajustes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        ajustes.addView(texto("Meus ajustes", 18f, corTexto, true))
+        campo(ajustes, "metaHora", "Meta de lucro por hora (R$)", cfg.metaHora)
+        campo(ajustes, "metaDia", "Meta do dia (R$)", cfg.metaDia)
+        campo(ajustes, "tempoExtra", "Tempo extra por entrega (min)", cfg.tempoExtra)
+        ajustes.addView(texto(
+            "Estacionar, esperar o pedido e entregar. Esse tempo entra na conta do R$ por hora.",
+            12f, corMuted, false
+        ))
+        campo(ajustes, "kml", "Consumo da moto (km/l)", cfg.kml)
+        campo(ajustes, "gas", "Gasolina (R$ por litro)", cfg.gas)
+        campo(ajustes, "desgaste", "Desgaste da moto (R$ por km)", cfg.desgaste)
+        campo(ajustes, "vermelho", "Recusar sempre abaixo de (R$ por km)", cfg.vermelho)
+        campo(ajustes, "kmLonge", "Avisar entrega longe a partir de (km)", cfg.kmLonge)
+        swVoz = Switch(this).apply {
+            text = "Falar o resultado em voz alta"
+            setTextColor(corTexto)
+            isChecked = cfg.voz
+            setPadding(0, dp(10), 0, dp(4))
+        }
+        ajustes.addView(swVoz)
+        swTodos = Switch(this).apply {
+            text = "Modo teste: ler qualquer app"
+            setTextColor(corTexto)
+            isChecked = cfg.todosApps
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        ajustes.addView(swTodos)
+        ajustes.addView(texto(
+            "Use o modo teste só se o app não reconhecer a 99. Depois desligue.",
+            12f, corMuted, false
+        ))
+        ajustes.addView(botao("Salvar ajustes", Color.parseColor("#2A2E38")) { salvar() })
+        ajustes.addView(botao("Voltar ao padrão", Color.parseColor("#2A2E38")) { padrao() })
+        raiz.addView(card(ajustes))
+
+        // Teste
+        resultado = texto("", 16f, corTexto, true)
+        raiz.addView(botao("2. Testar com oferta de exemplo", corDestaque) { testar() })
+        raiz.addView(resultado)
+
+        raiz.addView(botao("Copiar último texto lido da 99", Color.parseColor("#2A2E38")) {
+            val t = Estado.ultimoTexto
+            if (t.isBlank()) {
+                Toast.makeText(this, "Ainda não li nenhuma oferta.", Toast.LENGTH_SHORT).show()
+            } else {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("texto 99", t))
+                Toast.makeText(this, "Copiado. Cole na conversa com o Claude.", Toast.LENGTH_LONG).show()
+            }
+        })
+        raiz.addView(texto(
+            "Se uma oferta não for reconhecida, use esse botão e mande o texto para ajustar o app.",
+            12f, corMuted, false
+        ))
+
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(corFundo)
+            addView(raiz)
+        })
+    }
+
+    override fun onResume() {
+        super.onResume()
+        atualizarStatus()
+    }
+
+    private fun atualizarStatus() {
+        val ativo = Estado.servico != null
+        status.text = if (ativo) {
+            "Leitor: ATIVO ✅\nÚltimo app lido: ${Estado.ultimoApp}" +
+                (if (Estado.ultimoResultado.isNotBlank()) "\nÚltima oferta: ${Estado.ultimoResultado.replace("\n", " · ")}" else "")
+        } else {
+            "Leitor: DESATIVADO ❌\nToque no botão 1 para ativar."
+        }
+        status.setTextColor(if (ativo) Color.parseColor("#22C55E") else Color.parseColor("#EF4444"))
+
+        val cfg = Config.carregar(this)
+        val d = Dia.ler(this)
+        val falta = cfg.metaDia - d.valor
+        val sbDia = StringBuilder()
+        sbDia.append("Hoje: ${Analisador.dinheiro(d.valor)} de ${Analisador.inteiro(cfg.metaDia)}\n")
+        sbDia.append(if (falta > 0) "Faltam ${Analisador.dinheiro(falta)}\n" else "Meta batida! ✅\n")
+        sbDia.append("\n")
+        sbDia.append("Entregas: ${d.entregas}\n")
+        sbDia.append("Km rodados: ${Analisador.numero(d.km)} km\n")
+        sbDia.append("Gasolina: ${Analisador.dinheiro(d.gasolina)}\n")
+        sbDia.append("Desgaste da moto: ${Analisador.dinheiro(d.desgaste)}\n")
+        sbDia.append("Lucro real: ${Analisador.dinheiro(d.lucro)}\n")
+        sbDia.append("Horas: ${horasTexto(d.horas)}")
+        d.porHora?.let { sbDia.append("\nLucro por hora: ${Analisador.dinheiro(it)}") }
+        diaTexto.text = sbDia.toString()
+
+        val hist = Dia.historico(this).take(7)
+        historicoTexto.text = if (hist.isEmpty()) {
+            "Ainda não tem dias salvos."
+        } else {
+            hist.joinToString("\n\n") { t ->
+                val partes = t.data.split("-")
+                val data = if (partes.size == 3) "${partes[2]}/${partes[1]}" else t.data
+                val ph = t.porHora?.let { " · ${Analisador.inteiro(it)}/h" } ?: ""
+                "$data · ${t.entregas} entregas · ${Analisador.numero(t.km)} km\n" +
+                    "Ganho ${Analisador.dinheiro(t.valor)} · gasolina ${Analisador.dinheiro(t.gasolina)} · " +
+                    "lucro ${Analisador.dinheiro(t.lucro)}$ph"
+            }
+        }
+    }
+
+    private fun horasTexto(h: Double): String {
+        val totalMin = Math.round(h * 60)
+        return "${totalMin / 60}h${String.format("%02d", totalMin % 60)}"
+    }
+
+    private fun lerCampo(chave: String, padrao: Double): Double {
+        val t = campos[chave]?.text?.toString()?.trim()?.replace(",", ".") ?: return padrao
+        return t.toDoubleOrNull() ?: padrao
+    }
+
+    private fun lerTela(): Config {
+        val p = Config.PADRAO
+        return Config(
+            kml = lerCampo("kml", p.kml),
+            gas = lerCampo("gas", p.gas),
+            desgaste = lerCampo("desgaste", p.desgaste),
+            metaHora = lerCampo("metaHora", p.metaHora),
+            tempoExtra = lerCampo("tempoExtra", p.tempoExtra),
+            vermelho = lerCampo("vermelho", p.vermelho),
+            metaDia = lerCampo("metaDia", p.metaDia),
+            kmLonge = lerCampo("kmLonge", p.kmLonge),
+            voz = swVoz.isChecked,
+            todosApps = swTodos.isChecked
+        )
+    }
+
+    private fun salvar() {
+        Config.salvar(this, lerTela())
+        Toast.makeText(this, "Ajustes salvos", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun padrao() {
+        val p = Config.PADRAO
+        campos["kml"]?.setText(fmt(p.kml))
+        campos["gas"]?.setText(fmt(p.gas))
+        campos["desgaste"]?.setText(fmt(p.desgaste))
+        campos["vermelho"]?.setText(fmt(p.vermelho))
+        campos["metaHora"]?.setText(fmt(p.metaHora))
+        campos["metaDia"]?.setText(fmt(p.metaDia))
+        campos["tempoExtra"]?.setText(fmt(p.tempoExtra))
+        campos["kmLonge"]?.setText(fmt(p.kmLonge))
+        swVoz.isChecked = p.voz
+        swTodos.isChecked = p.todosApps
+        Config.salvar(this, p)
+        Toast.makeText(this, "Ajustes padrão", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun testar() {
+        salvar()
+        val oferta = Analisador.extrair(Analisador.EXEMPLO)
+        if (oferta == null) {
+            resultado.text = "Erro ao ler o exemplo."
+            return
+        }
+        val r = Analisador.avaliar(oferta, Config.carregar(this))
+        val cfgAtual = Config.carregar(this)
+        resultado.text = "Exemplo: R$ 10,50 · 1,2 km + 5,2 km · 17 min\n" +
+            Analisador.textoFaixa(r, Dia.ler(this), cfgAtual)
+        val s = Estado.servico
+        if (s != null) {
+            s.anunciar(r)
+        } else {
+            Toast.makeText(this, "Ative o leitor para ver a faixa e ouvir a voz.", Toast.LENGTH_LONG).show()
+        }
+        atualizarStatus()
+    }
+
+    private fun fmt(v: Double): String {
+        val s = v.toString()
+        return if (s.endsWith(".0")) s.dropLast(2) else s
+    }
+
+    private fun campo(pai: LinearLayout, chave: String, rotulo: String, valor: Double) {
+        pai.addView(texto(rotulo, 13f, corMuted, false).apply { setPadding(0, dp(10), 0, dp(4)) })
+        val et = EditText(this).apply {
+            setText(fmt(valor))
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setTextColor(corTexto)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#0B0D11"))
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), Color.parseColor("#2A2E38"))
+            }
+        }
+        campos[chave] = et
+        pai.addView(et)
+    }
+
+    private fun texto(t: String, tamanho: Float, cor: Int, negrito: Boolean): TextView =
+        TextView(this).apply {
+            text = t
+            setTextColor(cor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, tamanho)
+            if (negrito) typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(4), 0, dp(4))
+        }
+
+    private fun botao(t: String, cor: Int, acao: () -> Unit): Button =
+        Button(this).apply {
+            text = t
+            isAllCaps = false
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (cor == corDestaque) Color.parseColor("#111111") else corTexto)
+            background = GradientDrawable().apply {
+                setColor(cor)
+                cornerRadius = dp(12).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(54)
+            ).apply { topMargin = dp(12) }
+            setOnClickListener { acao() }
+        }
+
+    private fun card(conteudo: android.view.View): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = GradientDrawable().apply {
+                setColor(corCard)
+                cornerRadius = dp(14).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12) }
+            addView(conteudo)
+        }
+}

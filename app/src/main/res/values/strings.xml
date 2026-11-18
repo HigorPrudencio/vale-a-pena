@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vale a Pena</string>
+    <string name="servico_nome">Vale a Pena: leitor de ofertas</string>
+    <string name="servico_descricao">Lê o valor e os km das ofertas de entrega na tela da 99 e avisa se a entrega vale a pena. Nada sai do seu celular. O app não aceita nem recusa nada sozinho.</string>
+</resources>
