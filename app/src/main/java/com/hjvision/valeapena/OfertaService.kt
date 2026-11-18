@@ -3,6 +3,7 @@ package com.hjvision.valeapena
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -29,6 +30,10 @@ object Estado {
     @Volatile var diagnostico: String = ""
     @Volatile var diagAceitar: String = ""
     @Volatile var eventos99: Int = 0
+    @Volatile var capturaAtiva: Boolean = false
+    @Volatile var aceitarRect: Rect? = null
+    @Volatile var diagOcr: String = ""
+    @Volatile var leiturasOcr: Int = 0
 }
 
 class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
@@ -80,6 +85,8 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
             return
         }
 
+        if (eh99) CapturaService.instancia?.pedirLeitura()
+
         if (agora - ultimaLeitura < 300) return
         ultimaLeitura = agora
 
@@ -96,8 +103,29 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (texto.contains("R$") || texto.contains("R\u00A0$")) Estado.ultimoTexto = texto
 
         val oferta = Analisador.extrair(texto.replace('\u00A0', ' ')) ?: return
+        processarOferta(oferta)
+    }
+
+    /** Recebe as linhas lidas da imagem da tela (OCR). */
+    fun receberLinhas(linhas: List<Linha>) {
+        Estado.leiturasOcr++
+        val ordenadas = linhas.sortedBy { it.caixa.top }
+        val texto = ordenadas.joinToString("\n") { it.texto }
+        if (texto.contains("Aceitar", ignoreCase = true)) {
+            Estado.diagOcr = texto.take(2500)
+        }
+        val achado = Analisador.extrairOcr(ordenadas) ?: return
+        Estado.aceitarRect = achado.second
+        processarOferta(achado.first)
+    }
+
+    private fun processarOferta(oferta: Oferta) {
+        val agora = SystemClock.uptimeMillis()
         val assinatura = "${oferta.valor}|${oferta.kmColeta}|${oferta.kmEntrega}"
-        if (assinatura == ultimaAssinatura && agora - horaAssinatura < 60_000) return
+        if (assinatura == ultimaAssinatura && agora - horaAssinatura < 60_000) {
+            horaUltimaOferta = agora
+            return
+        }
         ultimaAssinatura = assinatura
         horaAssinatura = agora
 
@@ -130,7 +158,20 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
             event.source?.text?.let { textos.append(' ').append(it) }
         } catch (e: Exception) {
         }
-        if (!textos.toString().contains("Aceitar", ignoreCase = true)) return
+        var tocouNoBotao = false
+        val alvo = Estado.aceitarRect
+        if (alvo != null) {
+            try {
+                val fonte = event.source
+                if (fonte != null) {
+                    val caixa = Rect()
+                    fonte.getBoundsInScreen(caixa)
+                    tocouNoBotao = Rect.intersects(caixa, alvo) && caixa.height() < alvo.height() * 6
+                }
+            } catch (e: Exception) {
+            }
+        }
+        if (!textos.toString().contains("Aceitar", ignoreCase = true) && !tocouNoBotao) return
 
         val r = ultimaOferta ?: return
         if (agora - horaUltimaOferta > 90_000) return

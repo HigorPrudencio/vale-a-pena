@@ -25,6 +25,10 @@ import android.widget.Toast
 
 class MainActivity : Activity() {
 
+    companion object {
+        private const val PEDIDO_CAPTURA = 77
+    }
+
     private lateinit var status: TextView
     private lateinit var resultado: TextView
     private lateinit var diaTexto: TextView
@@ -116,6 +120,23 @@ class MainActivity : Activity() {
             "Na tela que abrir, entre em \"Apps instalados\" (ou \"Serviços\"), toque em \"Vale a Pena: leitor de ofertas\" e ative.",
             13f, corMuted, false
         ))
+        raiz.addView(botao("2. Ligar leitura por imagem", corDestaque) {
+            if (CapturaService.instancia != null) {
+                Toast.makeText(this, "A leitura por imagem já está ligada.", Toast.LENGTH_SHORT).show()
+            } else {
+                val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                startActivityForResult(mpm.createScreenCaptureIntent(), PEDIDO_CAPTURA)
+            }
+        })
+        raiz.addView(texto(
+            "A 99 esconde o texto da tela. Por isso o app lê a oferta pela imagem, direto no celular. Nada é gravado nem enviado. Toque em \"Iniciar agora\". Precisa ligar de novo se reiniciar o celular.",
+            13f, corMuted, false
+        ))
+        raiz.addView(botao("Desligar leitura por imagem", Color.parseColor("#2A2E38")) {
+            stopService(Intent(this, CapturaService::class.java))
+            Toast.makeText(this, "Leitura por imagem desligada.", Toast.LENGTH_SHORT).show()
+            status.postDelayed({ atualizarStatus() }, 500)
+        })
         raiz.addView(botao("Liberar uso de bateria", Color.parseColor("#2A2E38")) {
             try {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
@@ -168,11 +189,13 @@ class MainActivity : Activity() {
 
         // Teste
         resultado = texto("", 16f, corTexto, true)
-        raiz.addView(botao("2. Testar com oferta de exemplo", corDestaque) { testar() })
+        raiz.addView(botao("3. Testar com oferta de exemplo", corDestaque) { testar() })
         raiz.addView(resultado)
 
         raiz.addView(botao("Copiar diagnóstico da 99", Color.parseColor("#2A2E38")) {
-            val t = "Vale a Pena v0.3\nEventos lidos da 99: ${Estado.eventos99}\n\n" +
+            val t = "Vale a Pena v0.4\nEventos lidos da 99: ${Estado.eventos99}\n" +
+                "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
+                "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
                 "=== LEITURA COM BOTÃO ACEITAR ===\n${Estado.diagAceitar.ifBlank { "(nenhuma)" }}\n\n" +
                 "=== ÚLTIMA LEITURA ===\n${Estado.diagnostico.ifBlank { "(nenhuma)" }.take(1500)}\n\n" +
                 "=== ÚLTIMO TEXTO COM R$ ===\n${Estado.ultimoTexto.ifBlank { "(nenhum)" }.take(2500)}"
@@ -193,6 +216,22 @@ class MainActivity : Activity() {
         })
     }
 
+    @Deprecated("Activity sem AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PEDIDO_CAPTURA) return
+        if (resultCode != RESULT_OK || data == null) {
+            Toast.makeText(this, "Leitura por imagem não foi liberada.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val i = Intent(this, CapturaService::class.java)
+            .putExtra(CapturaService.EXTRA_CODIGO, resultCode)
+            .putExtra(CapturaService.EXTRA_DADOS, data)
+        if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+        Toast.makeText(this, "Leitura por imagem ligada.", Toast.LENGTH_SHORT).show()
+        status.postDelayed({ atualizarStatus() }, 800)
+    }
+
     override fun onResume() {
         super.onResume()
         atualizarStatus()
@@ -200,13 +239,18 @@ class MainActivity : Activity() {
 
     private fun atualizarStatus() {
         val ativo = Estado.servico != null
+        val imagem = if (CapturaService.instancia != null) "LIGADA ✅" else "DESLIGADA ❌ (toque no botão 2)"
         status.text = if (ativo) {
-            "Leitor: ATIVO ✅\nÚltimo app lido: ${Estado.ultimoApp}" +
+            "Leitor: ATIVO ✅\nLeitura por imagem: $imagem\nÚltimo app lido: ${Estado.ultimoApp}" +
                 (if (Estado.ultimoResultado.isNotBlank()) "\nÚltima oferta: ${Estado.ultimoResultado.replace("\n", " · ")}" else "")
         } else {
             "Leitor: DESATIVADO ❌\nToque no botão 1 para ativar."
         }
-        status.setTextColor(if (ativo) Color.parseColor("#22C55E") else Color.parseColor("#EF4444"))
+        status.setTextColor(
+            if (ativo && CapturaService.instancia != null) Color.parseColor("#22C55E")
+            else if (ativo) Color.parseColor("#FACC15")
+            else Color.parseColor("#EF4444")
+        )
 
         val cfg = Config.carregar(this)
         val d = Dia.ler(this)

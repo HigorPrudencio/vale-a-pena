@@ -1,6 +1,7 @@
 package com.hjvision.valeapena
 
 import android.content.Context
+import android.graphics.Rect
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -203,6 +204,9 @@ object Dia {
     }
 }
 
+/** Uma linha de texto lida da imagem da tela, com a posição dela. */
+data class Linha(val texto: String, val caixa: Rect)
+
 data class Oferta(val valor: Double, val kmColeta: Double, val kmEntrega: Double, val minutos: Int)
 
 data class Resultado(
@@ -248,6 +252,54 @@ object Analisador {
             kmEntrega = if (kms.size >= 2) kms.drop(1).sum() else kms[0],
             minutos = mins.sum()
         )
+    }
+
+    private val reValorOcr = Regex("""R\s?[${'$'}S5]\s?(\d{1,3}(?:[.\s]\d{3})*[,.]\d{2})""")
+
+    /** Textos da faixa do próprio app, que também aparecem na imagem. */
+    private fun ehNosso(t: String): Boolean =
+        t.contains("/km") || t.contains("/h") || t.contains("Hoje:") || t.contains("lucro", ignoreCase = true)
+
+    /**
+     * Lê a oferta a partir das linhas da imagem (OCR).
+     * Valor: o R$ com a maior letra acima do botão Aceitar (é o preço grande da oferta).
+     * Km e minutos: as linhas entre o preço e o botão Aceitar.
+     * Devolve a oferta e a posição do botão Aceitar na tela.
+     */
+    fun extrairOcr(linhas: List<Linha>): Pair<Oferta, Rect>? {
+        val aceitar = linhas.lastOrNull { it.texto.contains("Aceitar", ignoreCase = true) } ?: return null
+        val acima = linhas
+            .filter { it.caixa.top < aceitar.caixa.top && !ehNosso(it.texto) }
+            .sortedBy { it.caixa.top }
+        var melhor: Linha? = null
+        var melhorMatch: MatchResult? = null
+        for (l in acima) {
+            val m = reValorOcr.find(l.texto) ?: continue
+            val atual = melhor
+            if (atual == null || l.caixa.height() > atual.caixa.height()) {
+                melhor = l
+                melhorMatch = m
+            }
+        }
+        val preco = melhor ?: return null
+        val m = melhorMatch ?: return null
+        val digitos = m.groupValues[1].filter { it.isDigit() }
+        if (digitos.length < 3) return null
+        val valor = (digitos.toLongOrNull() ?: return null) / 100.0
+
+        val abaixo = acima.filter { it.caixa.top > preco.caixa.top }.joinToString("\n") { it.texto }
+        val kms = reKm.findAll(abaixo)
+            .mapNotNull { it.groupValues[1].replace(",", ".").toDoubleOrNull() }
+            .toList()
+        if (kms.isEmpty()) return null
+        val mins = reMin.findAll(abaixo).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
+        val oferta = Oferta(
+            valor = valor,
+            kmColeta = if (kms.size >= 2) kms[0] else 0.0,
+            kmEntrega = if (kms.size >= 2) kms.drop(1).sum() else kms[0],
+            minutos = mins.sum()
+        )
+        return Pair(oferta, Rect(aceitar.caixa))
     }
 
     /**
