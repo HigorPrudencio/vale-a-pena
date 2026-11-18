@@ -12,7 +12,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -49,8 +51,7 @@ class MainActivity : Activity() {
             setBackgroundColor(corFundo)
         }
 
-        raiz.addView(texto("Vale a Pena", 26f, corTexto, true))
-        raiz.addView(texto("Avisa se a entrega da 99 compensa para a sua moto.", 14f, corMuted, false))
+        raiz.addView(banner())
 
         status = texto("", 15f, corTexto, true)
         raiz.addView(card(status))
@@ -352,6 +353,52 @@ class MainActivity : Activity() {
             ).apply { topMargin = dp(12) }
             setOnClickListener { acao() }
         }
+
+    private fun banner(): LinearLayout {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(18), dp(16), dp(18))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.parseColor("#F5A524"), Color.parseColor("#FACC15"))
+            ).apply { cornerRadius = dp(18).toFloat() }
+        }
+        val icone = ImageView(this).apply {
+            setImageResource(R.drawable.ic_moto)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#111111"))
+            }
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+            layoutParams = LinearLayout.LayoutParams(dp(64), dp(64))
+        }
+        caixa.addView(icone)
+        val textos = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), 0, 0, 0)
+        }
+        textos.addView(TextView(this).apply {
+            text = "Vale a Pena"
+            setTextColor(Color.parseColor("#111111"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        textos.addView(TextView(this).apply {
+            text = "Saiba na hora se a entrega compensa"
+            setTextColor(Color.parseColor("#3A2E00"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        })
+        textos.addView(TextView(this).apply {
+            text = "Fazer 150 · Entrega Moto"
+            setTextColor(Color.parseColor("#5C4A00"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(4), 0, 0)
+        })
+        caixa.addView(textos)
+        return caixa
+    }
 
     private fun card(conteudo: android.view.View): LinearLayout =
         LinearLayout(this).apply {
