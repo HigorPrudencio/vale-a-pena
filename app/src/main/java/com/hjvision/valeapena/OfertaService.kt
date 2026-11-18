@@ -34,6 +34,8 @@ object Estado {
     @Volatile var aceitarRect: Rect? = null
     @Volatile var diagOcr: String = ""
     @Volatile var leiturasOcr: Int = 0
+    @Volatile var visto99: Long = 0L
+    @Volatile var ultimoOcr: String = ""
 }
 
 class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
@@ -85,12 +87,19 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
             return
         }
 
-        if (eh99) CapturaService.instancia?.pedirLeitura()
+        if (eh99) {
+            Estado.visto99 = agora
+            CapturaService.instancia?.pedirLeitura()
+        }
 
         if (agora - ultimaLeitura < 300) return
         ultimaLeitura = agora
 
         val leitura = lerTela()
+        if (leitura.tem99) {
+            Estado.visto99 = agora
+            CapturaService.instancia?.pedirLeitura()
+        }
         if (!leitura.tem99 && !cfg.todosApps) return
         if (eh99) Estado.ultimoApp = pkgEvento
         Estado.eventos99++
@@ -111,6 +120,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         Estado.leiturasOcr++
         val ordenadas = linhas.sortedBy { it.caixa.top }
         val texto = ordenadas.joinToString("\n") { it.texto }
+        Estado.ultimoOcr = texto.take(1200)
         if (texto.contains("Aceitar", ignoreCase = true)) {
             Estado.diagOcr = texto.take(2500)
         }

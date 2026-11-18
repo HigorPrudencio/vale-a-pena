@@ -53,6 +53,15 @@ class CapturaService : Service() {
     @Volatile private var ocupado = false
     private var ultimoPedido = 0L
 
+    /** Lê a tela uma vez por segundo enquanto a 99 apareceu nos últimos 5 segundos. */
+    private val ciclo = object : Runnable {
+        override fun run() {
+            val agora = SystemClock.uptimeMillis()
+            if (agora - Estado.visto99 < 5000) pedirLeitura()
+            principal.postDelayed(this, 1000)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,6 +124,7 @@ class CapturaService : Service() {
         )
         instancia = this
         Estado.capturaAtiva = true
+        principal.postDelayed(ciclo, 1000)
         return START_NOT_STICKY
     }
 
@@ -146,7 +156,7 @@ class CapturaService : Service() {
     /** Chamado pelo leitor de acessibilidade quando a tela da 99 muda. */
     fun pedirLeitura() {
         val agora = SystemClock.uptimeMillis()
-        if (ocupado || agora - ultimoPedido < 900) return
+        if (ocupado || agora - ultimoPedido < 800) return
         ultimoPedido = agora
         ocupado = true
         fundo.post {
@@ -194,6 +204,7 @@ class CapturaService : Service() {
     }
 
     override fun onDestroy() {
+        principal.removeCallbacks(ciclo)
         instancia = null
         Estado.capturaAtiva = false
         try {
