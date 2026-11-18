@@ -29,3 +29,13 @@ jobs:
           tag_name: v${{ github.run_number }}
           name: Vale a Pena v${{ github.run_number }}
           files: ValeAPena.apk
+          body: |
+            ## Vale a Pena v${{ github.run_number }}
+
+            **[👉 Baixar ValeAPena.apk](https://github.com/HigorPrudencio/vale-a-pena/releases/download/v${{ github.run_number }}/ValeAPena.apk)**
+
+            1. Abra o link no celular Android e instale
+            2. Já tinha o app? Instale por cima, seus dados continuam salvos
+            3. Abra o app e confira se os 3 itens da **Configuração** estão ligados
+
+            Passo a passo completo na [página do app](https://github.com/HigorPrudencio/vale-a-pena#readme).
