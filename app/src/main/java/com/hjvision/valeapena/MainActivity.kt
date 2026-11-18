@@ -171,18 +171,19 @@ class MainActivity : Activity() {
         raiz.addView(botao("2. Testar com oferta de exemplo", corDestaque) { testar() })
         raiz.addView(resultado)
 
-        raiz.addView(botao("Copiar último texto lido da 99", Color.parseColor("#2A2E38")) {
-            val t = Estado.ultimoTexto
-            if (t.isBlank()) {
-                Toast.makeText(this, "Ainda não li nenhuma oferta.", Toast.LENGTH_SHORT).show()
-            } else {
+        raiz.addView(botao("Copiar diagnóstico da 99", Color.parseColor("#2A2E38")) {
+            val t = "Vale a Pena v0.3\nEventos lidos da 99: ${Estado.eventos99}\n\n" +
+                "=== LEITURA COM BOTÃO ACEITAR ===\n${Estado.diagAceitar.ifBlank { "(nenhuma)" }}\n\n" +
+                "=== ÚLTIMA LEITURA ===\n${Estado.diagnostico.ifBlank { "(nenhuma)" }.take(1500)}\n\n" +
+                "=== ÚLTIMO TEXTO COM R$ ===\n${Estado.ultimoTexto.ifBlank { "(nenhum)" }.take(2500)}"
+            run {
                 val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("texto 99", t))
                 Toast.makeText(this, "Copiado. Cole na conversa com o Claude.", Toast.LENGTH_LONG).show()
             }
         })
         raiz.addView(texto(
-            "Se uma oferta não for reconhecida, use esse botão e mande o texto para ajustar o app.",
+            "Se uma oferta não for reconhecida, toque nesse botão logo depois que ela aparecer e mande o texto para o Claude.",
             12f, corMuted, false
         ))
 
@@ -306,8 +307,8 @@ class MainActivity : Activity() {
     }
 
     private fun fmt(v: Double): String {
-        val s = v.toString()
-        return if (s.endsWith(".0")) s.dropLast(2) else s
+        val s = String.format(java.util.Locale.US, "%.2f", v)
+        return s.trimEnd('0').trimEnd('.')
     }
 
     private fun campo(pai: LinearLayout, chave: String, rotulo: String, valor: Double) {

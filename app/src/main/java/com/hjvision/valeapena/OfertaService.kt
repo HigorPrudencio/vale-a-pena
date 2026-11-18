@@ -26,6 +26,9 @@ object Estado {
     @Volatile var ultimoResultado: String = ""
     @Volatile var ultimaOferta: Resultado? = null
     @Volatile var ultimaSomada: Resultado? = null
+    @Volatile var diagnostico: String = ""
+    @Volatile var diagAceitar: String = ""
+    @Volatile var eventos99: Int = 0
 }
 
 class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
@@ -58,18 +61,21 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val pkg = event?.packageName?.toString() ?: return
-        if (pkg == packageName) return
+        if (event == null) return
+        val pkgEvento = event.packageName?.toString() ?: ""
+        if (pkgEvento == packageName) return
 
         val agora = SystemClock.uptimeMillis()
         if (agora - cfgLidaEm > 3000) {
             cfg = Config.carregar(this)
             cfgLidaEm = agora
         }
-        val eh99 = pkg.contains("99") || pkg.contains("taxis", ignoreCase = true)
-        if (!cfg.todosApps && !eh99) return
+        val tipo = event.eventType
+        val mudouJanelas = tipo == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        val eh99 = eh99(pkgEvento)
+        if (!cfg.todosApps && !eh99 && !mudouJanelas) return
 
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+        if (tipo == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             verificarAceite(event, agora)
             return
         }
@@ -77,12 +83,19 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (agora - ultimaLeitura < 300) return
         ultimaLeitura = agora
 
-        val texto = lerTela(pkg)
+        val leitura = lerTela()
+        if (!leitura.tem99 && !cfg.todosApps) return
+        if (eh99) Estado.ultimoApp = pkgEvento
+        Estado.eventos99++
+        Estado.diagnostico = "Evento: ${nomeEvento(tipo)} de ${pkgEvento.ifBlank { "-" }}\n" +
+            leitura.resumo + "\n--- texto (${leitura.texto.length} letras) ---\n" +
+            leitura.texto.take(2500)
+        val texto = leitura.texto
+        if (texto.contains("Aceitar", ignoreCase = true)) Estado.diagAceitar = Estado.diagnostico
         if (texto.isBlank()) return
-        Estado.ultimoApp = pkg
-        if (texto.contains("R$")) Estado.ultimoTexto = texto
+        if (texto.contains("R$") || texto.contains("R\u00A0$")) Estado.ultimoTexto = texto
 
-        val oferta = Analisador.extrair(texto) ?: return
+        val oferta = Analisador.extrair(texto.replace('\u00A0', ' ')) ?: return
         val assinatura = "${oferta.valor}|${oferta.kmColeta}|${oferta.kmEntrega}"
         if (assinatura == ultimaAssinatura && agora - horaAssinatura < 60_000) return
         ultimaAssinatura = assinatura
@@ -93,6 +106,16 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         Estado.ultimaOferta = r
         horaUltimaOferta = agora
         anunciar(r)
+    }
+
+    private fun eh99(pkg: String) = pkg.contains("99") || pkg.contains("taxis", ignoreCase = true)
+
+    private fun nomeEvento(t: Int): String = when (t) {
+        AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "janela abriu"
+        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "conteúdo mudou"
+        AccessibilityEvent.TYPE_WINDOWS_CHANGED -> "janelas mudaram"
+        AccessibilityEvent.TYPE_VIEW_CLICKED -> "clique"
+        else -> "tipo $t"
     }
 
     private var ultimaOferta: Resultado? = null
@@ -140,27 +163,48 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun lerTela(pkg: String): String {
+    private class Leitura(val texto: String, val resumo: String, val tem99: Boolean)
+
+    private var nos = 0
+
+    /** Lê todas as janelas da tela, menos a do próprio app e a barra do sistema. */
+    private fun lerTela(): Leitura {
         val sb = StringBuilder()
+        val resumo = StringBuilder()
+        var tem99 = false
         try {
             val janelas = windows
-            var achou = false
+            resumo.append("Janelas: ${janelas.size}\n")
             for (w in janelas) {
-                val root = w.root ?: continue
-                if (root.packageName?.toString() == pkg) {
-                    coletar(root, sb, 0)
-                    achou = true
+                val root = w.root
+                val pkg = root?.packageName?.toString() ?: "?"
+                if (pkg == packageName || pkg == "com.android.systemui") {
+                    resumo.append("- tipo ${w.type} $pkg (ignorada)\n")
+                    continue
                 }
+                if (eh99(pkg)) tem99 = true
+                nos = 0
+                val antes = sb.length
+                coletar(root, sb, 0)
+                resumo.append("- tipo ${w.type} $pkg: $nos itens, ${sb.length - antes} letras\n")
             }
-            if (!achou) coletar(rootInActiveWindow, sb, 0)
+            if (janelas.isEmpty()) {
+                val root = rootInActiveWindow
+                val pkg = root?.packageName?.toString() ?: "?"
+                if (eh99(pkg)) tem99 = true
+                nos = 0
+                coletar(root, sb, 0)
+                resumo.append("- janela ativa $pkg: $nos itens\n")
+            }
         } catch (e: Exception) {
-            // tela mudou no meio da leitura; tenta de novo no próximo evento
+            resumo.append("Erro: ${e.javaClass.simpleName} ${e.message}\n")
         }
-        return sb.toString()
+        return Leitura(sb.toString(), resumo.toString(), tem99)
     }
 
     private fun coletar(n: AccessibilityNodeInfo?, sb: StringBuilder, nivel: Int) {
-        if (n == null || nivel > 50) return
+        if (n == null || nivel > 200 || nos > 4000) return
+        nos++
         val t = n.text
         if (t != null && t.isNotBlank()) {
             sb.append(t).append('\n')
