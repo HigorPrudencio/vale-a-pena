@@ -193,7 +193,7 @@ class MainActivity : Activity() {
         raiz.addView(resultado)
 
         raiz.addView(botao("Copiar diagnóstico da 99", Color.parseColor("#2A2E38")) {
-            val t = "Vale a Pena v0.4\nEventos lidos da 99: ${Estado.eventos99}\n" +
+            val t = "Vale a Pena v0.5\nEventos lidos da 99: ${Estado.eventos99}\n" +
                 "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
                 "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
                 "=== LEITURA COM BOTÃO ACEITAR ===\n${Estado.diagAceitar.ifBlank { "(nenhuma)" }}\n\n" +

@@ -224,7 +224,13 @@ data class Resultado(
 object Analisador {
     private val BR = Locale("pt", "BR")
     private val reValor = Regex("""R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})""")
-    private val reKm = Regex("""(\d+(?:[.,]\d+)?)\s*km\b""", RegexOption.IGNORE_CASE)
+    /** Distância em km ou em metros ("816m"). "min" não conta como metro. */
+    private val reKm = Regex("""(\d+(?:[.,]\d+)?)\s*(km|m)\b""", RegexOption.IGNORE_CASE)
+
+    private fun distancias(texto: String): List<Double> = reKm.findAll(texto).mapNotNull {
+        val n = it.groupValues[1].replace(",", ".").toDoubleOrNull() ?: return@mapNotNull null
+        if (it.groupValues[2].equals("m", ignoreCase = true)) n / 1000.0 else n
+    }.toList()
     private val reMin = Regex("""(\d+)\s*min\b""", RegexOption.IGNORE_CASE)
 
     /**
@@ -241,9 +247,7 @@ object Analisador {
         val v = reValor.find(trecho) ?: return null
         val valor = v.groupValues[1].replace(".", "").replace(",", ".").toDoubleOrNull() ?: return null
         val resto = trecho.substring(v.range.last + 1)
-        val kms = reKm.findAll(resto)
-            .mapNotNull { it.groupValues[1].replace(",", ".").toDoubleOrNull() }
-            .toList()
+        val kms = distancias(resto)
         if (kms.isEmpty()) return null
         val mins = reMin.findAll(resto).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
         return Oferta(
@@ -288,9 +292,7 @@ object Analisador {
         val valor = (digitos.toLongOrNull() ?: return null) / 100.0
 
         val abaixo = acima.filter { it.caixa.top > preco.caixa.top }.joinToString("\n") { it.texto }
-        val kms = reKm.findAll(abaixo)
-            .mapNotNull { it.groupValues[1].replace(",", ".").toDoubleOrNull() }
-            .toList()
+        val kms = distancias(abaixo)
         if (kms.isEmpty()) return null
         val mins = reMin.findAll(abaixo).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
         val oferta = Oferta(
