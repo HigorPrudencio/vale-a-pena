@@ -51,6 +51,17 @@ Abra o app e ligue os 3 itens do quadro **Configuração**:
 
 Pronto. Fique online no app de entregas e trabalhe normalmente. Se o celular reiniciar, ligue a **leitura por imagem** de novo.
 
+## Apps de banco
+
+Alguns apps de banco bloqueiam o celular quando acham um app de fora da Play Store que lê a tela. Isso é uma proteção contra golpes, porque apps falsos usam esse mesmo recurso pra roubar senhas.
+
+**Antes de abrir o banco:**
+1. Abra o Vale a Pena e toque em **⏸ Pausar tudo para usar o banco**
+2. Use o banco normalmente
+3. Depois, volte no Vale a Pena e toque em **Ativar** e **Ligar** de novo
+
+Se o banco continuar bloqueando mesmo com o app pausado, a única saída é desinstalar o Vale a Pena desse celular.
+
 ## Privacidade
 
 - Tudo roda **dentro do seu celular**

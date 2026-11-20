@@ -103,6 +103,11 @@ class MainActivity : Activity() {
             "A leitura por imagem precisa ser ligada de novo quando o celular reinicia. Tudo fica no celular: nada é gravado nem enviado.",
             12f, corMuted, false
         ).apply { setPadding(0, dp(8), 0, 0) })
+        conf.addView(botao("⏸  Pausar tudo para usar o banco", Color.parseColor("#7F1D1D")) { pausarTudo() })
+        conf.addView(texto(
+            "Apps de banco bloqueiam apps de fora da Play Store que leem a tela. Antes de abrir o banco, toque em Pausar. Depois, ligue de novo pelos botões Ativar e Ligar.",
+            12f, corMuted, false
+        ).apply { setPadding(0, dp(8), 0, 0) })
         raiz.addView(card(conf))
 
         // ===== Hoje =====
@@ -238,6 +243,17 @@ class MainActivity : Activity() {
         })
     }
 
+    private fun pausarTudo() {
+        stopService(Intent(this, CapturaService::class.java))
+        val servico = Estado.servico
+        if (servico != null) {
+            servico.pausar()
+            Estado.servico = null
+        }
+        Toast.makeText(this, "Pausado. Já pode abrir o banco.", Toast.LENGTH_LONG).show()
+        hojeValor.postDelayed({ atualizarStatus() }, 600)
+    }
+
     private fun ligarImagem() {
         if (CapturaService.instancia != null) {
             Toast.makeText(this, "A leitura por imagem já está ligada.", Toast.LENGTH_SHORT).show()
@@ -285,7 +301,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v0.7\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v0.8\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +

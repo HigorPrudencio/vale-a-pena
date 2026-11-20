@@ -204,6 +204,13 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /** Usado também pelo botão de teste da tela principal. */
+    /** Desliga o leitor de verdade (some da lista de serviços ativos), para usar apps de banco. */
+    fun pausar() {
+        handler.post { removerFaixa() }
+        tts?.stop()
+        disableSelf()
+    }
+
     fun anunciar(r: Resultado) {
         val c = Config.carregar(this)
         val texto = Analisador.textoFaixa(r, Dia.ler(this), c)
