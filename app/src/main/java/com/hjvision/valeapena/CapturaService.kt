@@ -57,8 +57,8 @@ class CapturaService : Service() {
     private val ciclo = object : Runnable {
         override fun run() {
             val agora = SystemClock.uptimeMillis()
-            if (agora - Estado.visto99 < 5000) pedirLeitura()
-            principal.postDelayed(this, 1000)
+            if (agora - Estado.visto99 < 8000) pedirLeitura()
+            principal.postDelayed(this, 500)
         }
     }
 
@@ -156,19 +156,21 @@ class CapturaService : Service() {
     /** Chamado pelo leitor de acessibilidade quando a tela da 99 muda. */
     fun pedirLeitura() {
         val agora = SystemClock.uptimeMillis()
-        if (ocupado || agora - ultimoPedido < 800) return
+        if (ocupado || agora - ultimoPedido < 400) return
         ultimoPedido = agora
         ocupado = true
         fundo.post {
-            val bmp = try {
+            val corte = try {
                 capturar()
             } catch (e: Exception) {
                 null
             }
-            if (bmp == null) {
+            if (corte == null) {
                 ocupado = false
                 return@post
             }
+            val bmp = corte.first
+            val topo = corte.second
             reconhecedor.process(InputImage.fromBitmap(bmp, 0))
                 .addOnSuccessListener { resultado ->
                     try {
@@ -176,6 +178,7 @@ class CapturaService : Service() {
                         for (bloco in resultado.textBlocks) {
                             for (l in bloco.lines) {
                                 val caixa = l.boundingBox ?: continue
+                                caixa.offset(0, topo)
                                 linhas.add(Linha(l.text, caixa))
                             }
                         }
@@ -188,7 +191,11 @@ class CapturaService : Service() {
         }
     }
 
-    private fun capturar(): Bitmap? {
+    /**
+     * Copia só a parte de baixo da tela (a partir de 30% da altura), onde fica o cartão da oferta.
+     * Ler menos imagem deixa o leitor de texto bem mais rápido. Devolve a imagem e onde ela começa.
+     */
+    private fun capturar(): Pair<Bitmap, Int>? {
         synchronized(trava) {
             val img = ultimaImagem ?: return null
             val plano = img.planes[0]
@@ -199,7 +206,10 @@ class CapturaService : Service() {
             val buffer = plano.buffer
             buffer.rewind()
             bruto.copyPixelsFromBuffer(buffer)
-            return if (sobra == 0) bruto else Bitmap.createBitmap(bruto, 0, 0, img.width, img.height)
+            val topo = (img.height * 0.30).toInt()
+            val recorte = Bitmap.createBitmap(bruto, 0, topo, img.width, img.height - topo)
+            if (recorte !== bruto) bruto.recycle()
+            return Pair(recorte, topo)
         }
     }
 

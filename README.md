@@ -2,7 +2,7 @@
 
 # Vale a Pena
 
-App Android que avisa **na hora** se uma oferta de entrega ou corrida de moto compensa.
+App Android que avisa **na hora** se uma oferta de entrega ou corrida de moto compensa. Funciona com a **99** e a **Uber**.
 
 Quando a oferta aparece, ele lê o valor e os km, faz a conta com os gastos da sua moto e mostra uma faixa colorida no topo da tela. Ele também fala o resultado em voz alta.
 
@@ -73,4 +73,4 @@ Baixe pelo mesmo link e instale por cima. Seus ajustes e o histórico continuam 
 
 ---
 
-Feito por **H.JVision**. App independente, sem nenhuma ligação com a 99 ou outras plataformas de entrega.
+Feito por **H.JVision**. App independente, sem nenhuma ligação com a 99, a Uber ou outras plataformas de entrega.

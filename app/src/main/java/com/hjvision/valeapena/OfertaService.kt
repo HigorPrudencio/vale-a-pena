@@ -146,7 +146,9 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         anunciar(r)
     }
 
-    private fun eh99(pkg: String) = pkg.contains("99") || pkg.contains("taxis", ignoreCase = true)
+    /** Apps de entrega e corrida que o leitor acompanha: 99 e Uber (motorista). */
+    private fun eh99(pkg: String) = pkg.contains("99") || pkg.contains("taxis", ignoreCase = true) ||
+        pkg.contains("ubercab", ignoreCase = true)
 
     private fun nomeEvento(t: Int): String = when (t) {
         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "janela abriu"
