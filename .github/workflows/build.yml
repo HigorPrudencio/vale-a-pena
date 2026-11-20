@@ -22,17 +22,16 @@ jobs:
           gradle-version: '8.9'
       - name: Preparar chave oficial
         env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::warning::Falta o segredo KEYSTORE_B64. O código vai ser compilado, mas a versão não vai ser publicada."
+          # A chave fica no repositório, protegida por senha. A senha fica só nos segredos do GitHub.
+          if [ -z "$KEYSTORE_PASS" ]; then
+            echo "::warning::Falta o segredo KEYSTORE_PASS. O código vai ser compilado, mas a versão não vai ser publicada."
             echo "SEM_CHAVE=1" >> "$GITHUB_ENV"
             exit 0
           fi
-          LIMPO=$(printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t')
-          echo "Tamanho do texto da chave: ${#LIMPO} (o certo é 4648)"
-          printf '%s' "$LIMPO" | base64 -d > "$RUNNER_TEMP/release.keystore"
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          echo "Tamanho da senha: ${#KEYSTORE_PASS} (o certo é 24)"
+          echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/app/release-oficial.keystore" >> "$GITHUB_ENV"
       - name: Compilar
         env:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
@@ -41,7 +40,6 @@ jobs:
         if: env.SEM_CHAVE != '1'
         run: |
           cp app/build/outputs/apk/release/app-release.apk ValeAPena.apk
-          rm -f "$RUNNER_TEMP/release.keystore"
           echo "SHA_APK=$(sha256sum ValeAPena.apk | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
         if: env.SEM_CHAVE != '1'
