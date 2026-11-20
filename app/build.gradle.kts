@@ -18,7 +18,7 @@ android {
     // Chave da versão oficial: fica guardada em segredo no GitHub (Settings > Secrets).
     // Sem ela, o GitHub não gera a versão oficial.
     val chaveArquivo = System.getenv("KEYSTORE_FILE")
-    val chaveSenha = System.getenv("KEYSTORE_PASS")
+    val chaveSenha = System.getenv("KEYSTORE_PASS")?.trim()
 
     signingConfigs {
         if (chaveArquivo != null && chaveSenha != null) {

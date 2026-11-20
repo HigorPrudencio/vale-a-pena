@@ -30,7 +30,8 @@ jobs:
             echo "SEM_CHAVE=1" >> "$GITHUB_ENV"
             exit 0
           fi
-          echo "Tamanho da senha: ${#KEYSTORE_PASS} (o certo é 24)"
+          LIMPA=$(printf '%s' "$KEYSTORE_PASS" | tr -d ' \r\n\t')
+          echo "Tamanho da senha: ${#LIMPA} (o certo é 24)"
           echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/app/release-oficial.keystore" >> "$GITHUB_ENV"
       - name: Compilar
         env:
