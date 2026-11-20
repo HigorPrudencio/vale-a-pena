@@ -38,6 +38,7 @@ class CapturaService : Service() {
         const val EXTRA_CODIGO = "codigo"
         const val EXTRA_DADOS = "dados"
         private const val CANAL = "captura"
+        private const val ESCALA = 0.6f
     }
 
     private var projecao: MediaProjection? = null
@@ -53,6 +54,11 @@ class CapturaService : Service() {
     @Volatile private var ocupado = false
     private var ultimoPedido = 0L
     @Volatile private var inicioLeitura = 0L
+    private val energia by lazy { getSystemService(POWER_SERVICE) as android.os.PowerManager }
+
+    // Resumo da última imagem lida, para não ler de novo quando a tela não mudou
+    private var ultimoResumo: IntArray? = null
+    private var ultimaLeituraFeita = 0L
     private var economiaLidaEm = 0L
     private var economiaCache = false
 
@@ -75,8 +81,9 @@ class CapturaService : Service() {
             if (ocupado && agora - inicioLeitura > 6000) ocupado = false
             val naTela = Estado.servico?.appNaTela() ?: false
             if (naTela) Estado.visto99 = agora
-            if (naTela || agora - Estado.visto99 < 8000) pedirLeitura()
-            principal.postDelayed(this, if (economia) 1000L else 500L)
+            val telaLigada = energia.isInteractive
+            if (telaLigada && (naTela || agora - Estado.visto99 < 8000)) pedirLeitura()
+            principal.postDelayed(this, if (economia) 1500L else 600L)
         }
     }
 
@@ -118,26 +125,16 @@ class CapturaService : Service() {
         val medidas = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(medidas)
-        val largura = medidas.widthPixels
-        val altura = medidas.heightPixels
+        // Copia a tela em 60% do tamanho: os números da oferta são grandes e continuam legíveis,
+        // e o celular gasta bem menos pra copiar cada quadro.
+        val largura = (medidas.widthPixels * ESCALA).toInt()
+        val altura = (medidas.heightPixels * ESCALA).toInt()
 
-        val r = ImageReader.newInstance(largura, altura, PixelFormat.RGBA_8888, 3)
-        r.setOnImageAvailableListener({ leitorAtual ->
-            val nova = try {
-                leitorAtual.acquireLatestImage()
-            } catch (e: Exception) {
-                null
-            }
-            if (nova != null) {
-                synchronized(trava) {
-                    ultimaImagem?.close()
-                    ultimaImagem = nova
-                }
-            }
-        }, fundo)
+        // Sem ouvir cada quadro: a imagem só é pega na hora de ler.
+        val r = ImageReader.newInstance(largura, altura, PixelFormat.RGBA_8888, 2)
         leitor = r
         tela = p.createVirtualDisplay(
-            "ValeAPena", largura, altura, medidas.densityDpi,
+            "ValeAPena", largura, altura, (medidas.densityDpi * ESCALA).toInt().coerceAtLeast(1),
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, fundo
         )
         instancia = this
@@ -174,7 +171,7 @@ class CapturaService : Service() {
     /** Chamado pelo leitor de acessibilidade quando a tela da 99 muda. */
     fun pedirLeitura() {
         val agora = SystemClock.uptimeMillis()
-        if (ocupado || agora - ultimoPedido < (if (economia) 900 else 400)) return
+        if (ocupado || agora - ultimoPedido < (if (economia) 1400 else 500)) return
         ultimoPedido = agora
         inicioLeitura = agora
         ocupado = true
@@ -202,8 +199,13 @@ class CapturaService : Service() {
                         val linhas = ArrayList<Linha>()
                         for (bloco in resultado.textBlocks) {
                             for (l in bloco.lines) {
-                                val caixa = l.boundingBox ?: continue
-                                caixa.offset(0, topo)
+                                val c = l.boundingBox ?: continue
+                                val caixa = android.graphics.Rect(
+                                    (c.left / ESCALA).toInt(),
+                                    ((c.top + topo) / ESCALA).toInt(),
+                                    (c.right / ESCALA).toInt(),
+                                    ((c.bottom + topo) / ESCALA).toInt()
+                                )
                                 linhas.add(Linha(l.text, caixa))
                             }
                         }
@@ -217,12 +219,13 @@ class CapturaService : Service() {
     }
 
     /**
-     * Copia só a parte de baixo da tela (a partir de 30% da altura), onde fica o cartão da oferta.
-     * Ler menos imagem deixa o leitor de texto bem mais rápido. Devolve a imagem e onde ela começa.
+     * Pega a imagem mais nova da tela, só a parte de baixo (a partir de 30% da altura),
+     * onde fica o cartão da oferta. Devolve null quando não precisa ler:
+     * a tela não mudou desde a última leitura.
      */
     private fun capturar(): Pair<Bitmap, Int>? {
-        synchronized(trava) {
-            val img = ultimaImagem ?: return null
+        val img = leitor?.acquireLatestImage() ?: return null  // null: nenhum quadro novo, a tela não mudou
+        try {
             val plano = img.planes[0]
             val passoPixel = plano.pixelStride
             val passoLinha = plano.rowStride
@@ -234,8 +237,41 @@ class CapturaService : Service() {
             val topo = (img.height * 0.30).toInt()
             val recorte = Bitmap.createBitmap(bruto, 0, topo, img.width, img.height - topo)
             if (recorte !== bruto) bruto.recycle()
+
+            // Compara com a última leitura usando uma miniatura. Se quase nada mudou, não lê de novo.
+            // Mesmo assim, lê pelo menos a cada 4 segundos, por segurança.
+            val resumo = resumir(recorte)
+            val anterior = ultimoResumo
+            val agora = SystemClock.uptimeMillis()
+            if (anterior != null && agora - ultimaLeituraFeita < 4000 && parecido(anterior, resumo)) {
+                recorte.recycle()
+                return null
+            }
+            ultimoResumo = resumo
+            ultimaLeituraFeita = agora
             return Pair(recorte, topo)
+        } finally {
+            img.close()
         }
+    }
+
+    /** Miniatura de 24 x 40 em tons de cinza. */
+    private fun resumir(b: Bitmap): IntArray {
+        val mini = Bitmap.createScaledBitmap(b, 24, 40, false)
+        val px = IntArray(24 * 40)
+        mini.getPixels(px, 0, 24, 0, 0, 24, 40)
+        mini.recycle()
+        for (i in px.indices) {
+            val c = px[i]
+            px[i] = (((c shr 16) and 0xFF) + ((c shr 8) and 0xFF) + (c and 0xFF)) / 3
+        }
+        return px
+    }
+
+    private fun parecido(a: IntArray, b: IntArray): Boolean {
+        var diferentes = 0
+        for (i in a.indices) if (Math.abs(a[i] - b[i]) > 24) diferentes++
+        return diferentes < a.size / 50  // menos de 2% da miniatura mudou
     }
 
     override fun onDestroy() {

@@ -349,7 +349,7 @@ class MainActivity : Activity() {
         }
         ajustesConteudo.addView(swVoz)
         swEconomia = Switch(this).apply {
-            text = "Economia de bateria (lê a tela a cada 1 segundo)"
+            text = "Economia extra de bateria (lê a tela a cada 1,5 segundo)"
             setTextColor(corTexto)
             isChecked = cfg.economia
             setPadding(0, dp(4), 0, dp(4))
@@ -455,7 +455,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.5\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.6\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
