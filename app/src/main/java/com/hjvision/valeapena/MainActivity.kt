@@ -357,6 +357,10 @@ class MainActivity : Activity() {
         ajustesConteudo.addView(swEconomia)
         ajustesConteudo.addView(botao("Salvar ajustes", corDestaque) { salvar() })
         ajustesConteudo.addView(botao("✎  Editar cadastro (moto, meta, horas)", corBotao) { mostrarCadastro() })
+        ajustesConteudo.addView(botao("Voltar o cartão da oferta pro lugar inicial", corBotao) {
+            getSharedPreferences("cartao", MODE_PRIVATE).edit().clear().apply()
+            Toast.makeText(this, "Pronto. O cartão volta pro canto esquerdo.", Toast.LENGTH_SHORT).show()
+        })
         ajustesConteudo.addView(botao("Voltar ao padrão", corBotao) { padrao() })
         val ajustesBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -451,7 +455,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.4\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.5\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +

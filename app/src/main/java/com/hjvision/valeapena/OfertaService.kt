@@ -125,7 +125,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         Estado.leiturasOcr++
         val cartao = Estado.faixaRect
         val ordenadas = linhas
-            .filter { cartao == null || !Rect.intersects(cartao, it.caixa) }
+            .filter { cartao == null || !cartao.contains(it.caixa.centerX(), it.caixa.centerY()) }
             .sortedBy { it.caixa.top }
         val texto = ordenadas.joinToString("\n") { it.texto }
         Estado.ultimoOcr = texto.take(1200)
@@ -388,7 +388,11 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (borda > 0) setStroke(dp(borda), corBorda)
     }
 
-    /** Cartão que aparece por cima da oferta: resultado, R$ por hora, detalhes e progresso do dia. */
+    /**
+     * Cartão compacto e em pé que aparece por cima da oferta.
+     * Fica no canto esquerdo, longe do X e dos botões da 99 e da Uber.
+     * Dá pra arrastar com o dedo: o app guarda a posição. Um toque rápido fecha.
+     */
     private fun mostrarFaixa(r: Resultado, dia: Dia.Total, cfg: Config) {
         val gerenciador = wm ?: return
         removerFaixa()
@@ -397,143 +401,141 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         val cor = if (boa) Color.parseColor("#22C55E") else Color.parseColor("#EF4444")
         val branco = Color.parseColor("#F2F3F5")
         val cinza = Color.parseColor("#9AA0AB")
-        val bloco = Color.parseColor("#262A33")
 
         val cartao = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(12))
-            background = redondo(Color.parseColor("#F2121418"), 22, 2, cor)
-            setOnClickListener { removerFaixa() }
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = redondo(Color.parseColor("#F2121418"), 16, 2, cor)
+            minimumWidth = dp(120)
         }
 
-        // Linha de cima: selo, resultado e R$ por hora
-        val topo = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val selo = txt(if (boa) "✓" else "✕", 26f, Color.WHITE, true).apply {
+        // Selo: ✓ BOA ou ✕ RUIM
+        cartao.addView(txt(if (boa) "✓ BOA" else "✕ RUIM", 15f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(cor)
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(50), dp(50))
-        }
-        topo.addView(selo)
-        val titulos = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        titulos.addView(txt(if (boa) "BOA" else "RUIM", 26f, cor, true))
-        titulos.addView(txt(
-            if (boa) "Bate a sua meta" else "Não bate a sua meta",
-            13f, cinza
-        ).apply { setPadding(0, dp(4), 0, 0) })
-        topo.addView(titulos)
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = redondo(cor, 10)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        })
+
+        // R$ por hora em destaque
         val h = r.porHora
         if (h != null) {
-            val hora = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.END
-            }
-            hora.addView(txt("R$ ${Math.round(h)}/h", 28f, branco, true))
-            hora.addView(txt("meta R$ ${Math.round(cfg.metaHora)}/h", 12f, cinza).apply {
-                gravity = Gravity.END
-                setPadding(0, dp(4), 0, 0)
+            cartao.addView(txt("R$ ${Math.round(h)}/h", 22f, branco, true).apply {
+                setPadding(0, dp(8), 0, 0)
             })
-            topo.addView(hora)
+            cartao.addView(txt("meta R$ ${Math.round(cfg.metaHora)}/h", 11f, cinza).apply {
+                setPadding(0, dp(2), 0, 0)
+            })
         }
-        cartao.addView(topo)
 
-        // Três quadradinhos: por km, lucro e tempo
-        val linha = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(12), 0, 0)
+        // Detalhes, um embaixo do outro
+        fun linha(t: String, corTexto: Int = branco, tamanho: Float = 13f, negrito: Boolean = true) {
+            cartao.addView(txt(t, tamanho, corTexto, negrito).apply { setPadding(0, dp(6), 0, 0) })
         }
-        fun quadro(valor: String, rotulo: String, primeiro: Boolean) {
-            val q = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(6), dp(8), dp(6), dp(8))
-                background = redondo(bloco, 12)
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (!primeiro) leftMargin = dp(8)
-                }
-            }
-            q.addView(txt(valor, 16f, branco, true).apply { gravity = Gravity.CENTER })
-            q.addView(txt(rotulo, 11f, cinza).apply {
-                gravity = Gravity.CENTER
-                setPadding(0, dp(3), 0, 0)
-            })
-            linha.addView(q)
-        }
-        quadro("${Analisador.dinheiro(r.porKm)}/km", "por km", true)
-        quadro(Analisador.dinheiro(r.lucro), "lucro", false)
-        quadro("${r.minutos} min", "${Analisador.numero(r.km)} km", false)
-        cartao.addView(linha)
-
-        // Aviso de entrega longe
-        if (r.longe) {
-            cartao.addView(txt("⚠  Entrega longe: veja se tem pedido na volta", 13f, Color.parseColor("#FACC15"), true).apply {
-                setPadding(dp(10), dp(8), dp(10), dp(8))
-                background = redondo(Color.parseColor("#3A2E00"), 10)
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(10) }
-            })
-        }
+        linha("${Analisador.dinheiro(r.porKm)}/km")
+        linha("lucro ${Analisador.dinheiro(r.lucro)}")
+        linha("${r.minutos} min · ${Analisador.numero(r.km)} km", cinza, 12f, false)
+        if (r.longe) linha("⚠ Entrega longe", Color.parseColor("#FACC15"), 12f, true)
 
         // Progresso do dia
         if (cfg.metaDia > 0) {
-            val falta = cfg.metaDia - dia.valor
-            cartao.addView(txt(
-                if (falta > 0) "Hoje: ${Analisador.dinheiro(dia.valor)} de ${Analisador.inteiro(cfg.metaDia)} · faltam ${Analisador.dinheiro(falta)}"
-                else "Hoje: ${Analisador.dinheiro(dia.valor)} · meta batida ✅",
-                12f, cinza
-            ).apply { setPadding(0, dp(12), 0, dp(6)) })
+            linha("Hoje: ${Analisador.inteiro(dia.valor)} de ${Analisador.inteiro(cfg.metaDia)}", cinza, 11f, false)
             val pct = (dia.valor / cfg.metaDia).coerceIn(0.0, 1.0).toFloat()
             val trilho = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 weightSum = 1f
-                background = redondo(bloco, 3)
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6))
+                background = redondo(Color.parseColor("#262A33"), 2)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)).apply {
+                    topMargin = dp(4)
+                }
             }
             trilho.addView(View(this).apply {
-                background = redondo(Color.parseColor("#F5A524"), 3)
+                background = redondo(Color.parseColor("#F5A524"), 2)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, pct)
             })
             cartao.addView(trilho)
         }
 
+        // Posição: a última que a pessoa escolheu, ou canto esquerdo, a 18% da altura da tela
+        val prefs = getSharedPreferences("cartao", MODE_PRIVATE)
+        val alturaTela = resources.displayMetrics.heightPixels
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP
-            x = 0
-            y = dp(44)
-            horizontalMargin = 0.03f
+            gravity = Gravity.TOP or Gravity.START
+            val larguraTela = resources.displayMetrics.widthPixels
+            x = prefs.getInt("x", dp(8)).coerceIn(0, (larguraTela - dp(100)).coerceAtLeast(0))
+            y = prefs.getInt("y", (alturaTela * 0.18).toInt()).coerceIn(0, (alturaTela - dp(160)).coerceAtLeast(0))
+        }
+
+        // Arrastar com o dedo; toque rápido fecha
+        var inicioX = 0
+        var inicioY = 0
+        var toqueX = 0f
+        var toqueY = 0f
+        var moveu = false
+        cartao.setOnTouchListener { v, ev ->
+            when (ev.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    inicioX = params.x
+                    inicioY = params.y
+                    toqueX = ev.rawX
+                    toqueY = ev.rawY
+                    moveu = false
+                    handler.removeCallbacks(esconder)
+                    true
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val dx = (ev.rawX - toqueX).toInt()
+                    val dy = (ev.rawY - toqueY).toInt()
+                    if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) moveu = true
+                    if (moveu) {
+                        params.x = (inicioX + dx).coerceAtLeast(0)
+                        params.y = (inicioY + dy).coerceAtLeast(0)
+                        try {
+                            gerenciador.updateViewLayout(v, params)
+                        } catch (e: Exception) {
+                        }
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (moveu) {
+                        prefs.edit().putInt("x", params.x).putInt("y", params.y).apply()
+                        guardarPosicao(v)
+                        handler.postDelayed(esconder, 15_000)
+                    } else {
+                        removerFaixa()
+                    }
+                    true
+                }
+                else -> false
+            }
         }
 
         try {
             gerenciador.addView(cartao, params)
             faixa = cartao
-            cartao.post {
-                // Guarda onde o cartão está, para a leitura por imagem ignorar o próprio cartão
-                val pos = IntArray(2)
-                cartao.getLocationOnScreen(pos)
-                Estado.faixaRect = Rect(pos[0], pos[1], pos[0] + cartao.width, pos[1] + cartao.height)
-            }
+            cartao.post { guardarPosicao(cartao) }
             handler.removeCallbacks(esconder)
             handler.postDelayed(esconder, 15_000)
         } catch (e: Exception) {
             faixa = null
         }
+    }
+
+    /** Guarda onde o cartão está, para a leitura por imagem ignorar o próprio cartão. */
+    private fun guardarPosicao(v: View) {
+        val pos = IntArray(2)
+        v.getLocationOnScreen(pos)
+        Estado.faixaRect = Rect(pos[0], pos[1], pos[0] + v.width, pos[1] + v.height)
     }
 
     private fun removerFaixa() {
