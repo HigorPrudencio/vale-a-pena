@@ -40,6 +40,16 @@ Na primeira vez que você abre o app, ele pede um **cadastro rápido**: seu nome
 
 O Play Protect bloqueia porque o app não está na Play Store e lê a tela. O código está todo aqui, aberto.
 
+### Android 13 ou mais novo: "Acesso negado ao app"
+
+Se aparecer **"Acesso negado ao app"** quando você tentar ativar o leitor de ofertas:
+
+1. Toque em **Fechar**
+2. Abra **Configurações > Apps > Vale a Pena**
+3. Toque nos **3 pontinhos** no canto de cima à direita
+4. Toque em **Permitir configurações restritas** e confirme com o PIN ou a digital
+5. Volte no Vale a Pena e ative o leitor de novo
+
 ## Configurar (só na primeira vez)
 
 Abra o app e ligue os 3 itens do quadro **Configuração**:
