@@ -29,7 +29,9 @@ jobs:
             echo "SEM_CHAVE=1" >> "$GITHUB_ENV"
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          LIMPO=$(printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t')
+          echo "Tamanho do texto da chave: ${#LIMPO} (o certo é 4648)"
+          printf '%s' "$LIMPO" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
       - name: Compilar
         env:
