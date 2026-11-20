@@ -19,8 +19,7 @@ Abra o link no celular Android. O download começa sozinho. Esse link sempre bai
 | <img src="docs/faixa-na-oferta.png" width="280"> | <img src="docs/tela-inicial.png" width="280"> |
 
 - 🟢 **BOA:** bate a sua meta de lucro por hora
-- 🟡 **MAIS OU MENOS:** fica perto da meta (80% ou mais)
-- 🔴 **RECUSA:** paga pouco por hora, paga menos de R$ 1 por km, ou dá prejuízo
+- 🔴 **RUIM:** não bate a meta, paga menos de R$ 1 por km, ou dá prejuízo
 - ⚠️ **Entrega longe:** avisa quando o destino passa de 10 km, porque você pode voltar vazio
 
 ## O que ele calcula
@@ -31,7 +30,7 @@ Abra o link no celular Android. O download começa sozinho. Esse link sempre bai
 - **Resumo do dia:** entregas, km, gasolina, desgaste, lucro e lucro por hora
 - **Histórico:** guarda 90 dias e copia tudo pra colar no Google Planilhas
 
-Os valores padrão são de uma Yamaha Fazer 150 (35 km/l, gasolina R$ 6,39, meta de R$ 25 por hora). Dá pra mudar tudo em **Meus ajustes**.
+Na primeira vez que você abre o app, ele pede um **cadastro rápido**: seu nome, sua moto, quantos km ela faz por litro, o preço da gasolina, quanto quer ganhar por dia e quantas horas quer trabalhar. Com isso ele calcula a sua meta por hora. Dá pra mudar depois em **Meus ajustes > Editar cadastro**.
 
 ## Instalar
 

@@ -234,7 +234,7 @@ data class Linha(val texto: String, val caixa: Rect)
 data class Oferta(val valor: Double, val kmColeta: Double, val kmEntrega: Double, val minutos: Int)
 
 data class Resultado(
-    val nivel: Int, // 0 ruim, 1 mais ou menos, 2 boa
+    val nivel: Int, // 0 ruim, 2 boa
     val titulo: String,
     val porKm: Double,
     val lucro: Double,
@@ -342,27 +342,16 @@ object Analisador {
         val minutos = if (o.minutos > 0) o.minutos + c.tempoExtra.toInt() else 0
         val porHora = if (minutos > 0) lucro / (minutos / 60.0) else null
 
+        // Só dois resultados: BOA (bate a meta) ou RUIM (não bate)
         var nivel = if (porHora != null && c.metaHora > 0) {
-            when {
-                porHora >= c.metaHora -> 2
-                porHora >= c.metaHora * 0.8 -> 1
-                else -> 0
-            }
+            if (porHora >= c.metaHora) 2 else 0
         } else {
-            when {
-                porKm >= 1.5 -> 2
-                porKm >= c.vermelho -> 1
-                else -> 0
-            }
+            if (porKm >= 1.5) 2 else 0
         }
         if (porKm < c.vermelho) nivel = 0
         if (lucro <= 0) nivel = 0
 
-        val titulo = when (nivel) {
-            2 -> "BOA"
-            1 -> "MAIS OU MENOS"
-            else -> "RECUSA"
-        }
+        val titulo = if (nivel == 2) "BOA" else "RUIM"
         val longe = c.kmLonge > 0 && o.kmEntrega >= c.kmLonge
         return Resultado(nivel, titulo, porKm, lucro, porHora, minutos, km, o.valor, longe)
     }
@@ -385,11 +374,7 @@ object Analisador {
     }
 
     fun fala(r: Resultado): String {
-        val inicio = when (r.nivel) {
-            2 -> "Entrega boa."
-            1 -> "Mais ou menos."
-            else -> "Entrega ruim."
-        }
+        val inicio = if (r.nivel == 2) "Entrega boa." else "Entrega ruim."
         val h = r.porHora
         val base = if (h != null && h > 0) {
             "$inicio ${Math.round(h)} reais por hora."
