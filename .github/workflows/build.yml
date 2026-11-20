@@ -20,11 +20,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Preparar chave oficial
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::Falta o segredo KEYSTORE_B64. O código vai ser compilado, mas a versão não vai ser publicada."
+            echo "SEM_CHAVE=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
       - name: Compilar
+        env:
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
         run: gradle assembleRelease --no-daemon
-      - name: Renomear
-        run: cp app/build/outputs/apk/release/app-release.apk ValeAPena.apk
+      - name: Renomear e gerar código de conferência
+        if: env.SEM_CHAVE != '1'
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk ValeAPena.apk
+          rm -f "$RUNNER_TEMP/release.keystore"
+          echo "SHA_APK=$(sha256sum ValeAPena.apk | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
+        if: env.SEM_CHAVE != '1'
         with:
           tag_name: v${{ github.run_number }}
           name: Vale a Pena v${{ github.run_number }}
@@ -37,5 +55,11 @@ jobs:
             1. Abra o link no celular Android e instale
             2. Já tinha o app? Instale por cima, seus dados continuam salvos
             3. Abra o app e confira se os 3 itens da **Configuração** estão ligados
+
+            **Código de conferência (SHA-256) do arquivo:**
+            `${{ env.SHA_APK }}`
+
+            **Assinatura oficial do app (SHA-256 do certificado):**
+            `A9:29:84:76:9D:5D:A1:AA:43:22:DD:5C:50:E3:DF:D9:DF:FB:0A:04:74:9D:62:8B:29:89:87:5D:EA:F8:D3:5F`
 
             Passo a passo completo na [página do app](https://github.com/HigorPrudencio/vale-a-pena#readme).

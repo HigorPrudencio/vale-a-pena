@@ -34,7 +34,6 @@ class MainActivity : Activity() {
     private lateinit var resultado: TextView
     private val campos = LinkedHashMap<String, EditText>()
     private lateinit var swVoz: Switch
-    private lateinit var swTodos: Switch
 
     // Status da configuração
     private lateinit var stLeitor: TextView
@@ -329,13 +328,6 @@ class MainActivity : Activity() {
             setPadding(0, dp(12), 0, dp(4))
         }
         ajustesConteudo.addView(swVoz)
-        swTodos = Switch(this).apply {
-            text = "Modo teste: ler qualquer app"
-            setTextColor(corTexto)
-            isChecked = cfg.todosApps
-            setPadding(0, dp(4), 0, dp(4))
-        }
-        ajustesConteudo.addView(swTodos)
         ajustesConteudo.addView(botao("Salvar ajustes", corDestaque) { salvar() })
         ajustesConteudo.addView(botao("✎  Editar cadastro (moto, meta, horas)", corBotao) { mostrarCadastro() })
         ajustesConteudo.addView(botao("Voltar ao padrão", corBotao) { padrao() })
@@ -432,7 +424,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.2\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.3\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
@@ -690,7 +682,7 @@ class MainActivity : Activity() {
             metaDia = lerCampo("metaDia", p.metaDia),
             kmLonge = lerCampo("kmLonge", p.kmLonge),
             voz = swVoz.isChecked,
-            todosApps = swTodos.isChecked
+            todosApps = false
         )
     }
 
@@ -710,7 +702,6 @@ class MainActivity : Activity() {
         campos["tempoExtra"]?.setText(fmt(p.tempoExtra))
         campos["kmLonge"]?.setText(fmt(p.kmLonge))
         swVoz.isChecked = p.voz
-        swTodos.isChecked = p.todosApps
         Config.salvar(this, p)
         Toast.makeText(this, "Ajustes padrão", Toast.LENGTH_SHORT).show()
     }

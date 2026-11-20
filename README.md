@@ -71,11 +71,16 @@ Alguns apps de banco bloqueiam o celular quando acham um app de fora da Play Sto
 
 Se o banco continuar bloqueando mesmo com o app pausado, a única saída é desinstalar o Vale a Pena desse celular.
 
-## Privacidade
+## Privacidade e segurança
 
-- Tudo roda **dentro do seu celular**
-- A imagem da tela é lida na hora e apagada. Nada é gravado nem enviado pra internet.
+- **Sem internet:** o app não tem permissão de internet. Confira em Configurações > Apps > Vale a Pena > Permissões. Nada sai do seu celular.
+- **Só 99 e Uber:** o leitor só recebe informações desses dois apps. Ele não vê WhatsApp, banco nem nenhum outro app.
+- A imagem da tela é lida na hora e apagada. Nada é gravado.
 - O app **não aceita nem recusa** nada sozinho. Quem decide é você.
+- **Baixe só por esta página.** Nunca instale um arquivo repassado por outra pessoa.
+- **Assinatura oficial:** toda versão oficial é assinada com uma chave guardada em segredo. O código SHA-256 do certificado é:
+  `A9:29:84:76:9D:5D:A1:AA:43:22:DD:5C:50:E3:DF:D9:DF:FB:0A:04:74:9D:62:8B:29:89:87:5D:EA:F8:D3:5F`
+- Cada versão em **Releases** mostra o código de conferência do arquivo, pra provar que ele é o original.
 
 ## Atualizar
 

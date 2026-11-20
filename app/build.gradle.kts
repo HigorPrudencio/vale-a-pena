@@ -11,24 +11,32 @@ android {
         applicationId = "com.hjvision.valeapena"
         minSdk = 24
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.2"
+        versionCode = 13
+        versionName = "1.3"
     }
 
+    // Chave da versão oficial: fica guardada em segredo no GitHub (Settings > Secrets).
+    // Sem ela, o GitHub não gera a versão oficial.
+    val chaveArquivo = System.getenv("KEYSTORE_FILE")
+    val chaveSenha = System.getenv("KEYSTORE_PASS")
+
     signingConfigs {
-        create("fixo") {
-            storeFile = file("valeapena.keystore")
-            storePassword = "valeapena"
-            keyAlias = "valeapena"
-            keyPassword = "valeapena"
+        if (chaveArquivo != null && chaveSenha != null) {
+            create("oficial") {
+                storeFile = file(chaveArquivo)
+                storePassword = chaveSenha
+                keyAlias = "valeapena"
+                keyPassword = chaveSenha
+            }
         }
     }
 
     buildTypes {
-        getByName("debug") { signingConfig = signingConfigs.getByName("fixo") }
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("fixo")
+            if (chaveArquivo != null && chaveSenha != null) {
+                signingConfig = signingConfigs.getByName("oficial")
+            }
         }
     }
 

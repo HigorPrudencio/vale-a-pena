@@ -4,5 +4,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
+    android:packageNames="com.app99.driver,com.ubercab.driver"
     android:notificationTimeout="250"
     android:description="@string/servico_descricao" />
