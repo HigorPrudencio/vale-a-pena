@@ -204,6 +204,30 @@ object Dia {
     }
 }
 
+/** Cadastro da pessoa: nome, moto e horas por dia. */
+data class Perfil(val nome: String, val moto: String, val horas: Double, val feito: Boolean) {
+    companion object {
+        fun carregar(c: Context): Perfil {
+            val p = c.getSharedPreferences("perfil", Context.MODE_PRIVATE)
+            return Perfil(
+                p.getString("nome", "") ?: "",
+                p.getString("moto", "") ?: "",
+                p.getFloat("horas", 3f).toDouble(),
+                p.getBoolean("feito", false)
+            )
+        }
+
+        fun salvar(c: Context, pf: Perfil) {
+            c.getSharedPreferences("perfil", Context.MODE_PRIVATE).edit()
+                .putString("nome", pf.nome)
+                .putString("moto", pf.moto)
+                .putFloat("horas", pf.horas.toFloat())
+                .putBoolean("feito", pf.feito)
+                .apply()
+        }
+    }
+}
+
 /** Uma linha de texto lida da imagem da tela, com a posição dela. */
 data class Linha(val texto: String, val caixa: Rect)
 

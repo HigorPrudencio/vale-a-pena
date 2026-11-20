@@ -71,7 +71,137 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = corFundo
+        if (Perfil.carregar(this).feito) construirTela() else mostrarCadastro()
+    }
 
+    // ===== Cadastro (primeira vez e "Editar cadastro") =====
+    private fun mostrarCadastro() {
+        val perfil = Perfil.carregar(this)
+        val cfg = Config.carregar(this)
+        val raiz = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(32))
+            setBackgroundColor(corFundo)
+        }
+        raiz.addView(banner())
+        raiz.addView(texto(
+            if (perfil.feito) "Editar cadastro" else "Bem-vindo! Vamos configurar o app pra você.",
+            20f, corTexto, true
+        ).apply { setPadding(0, dp(18), 0, dp(4)) })
+        raiz.addView(texto(
+            "Com esses dados o app calcula seus gastos e diz se a entrega vale a pena pra você. Dá pra mudar depois.",
+            14f, corMuted, false
+        ))
+
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val cNome = campoTexto(form, "Seu nome", perfil.nome, "Ex: Higor")
+        val cMoto = campoTexto(form, "Sua moto", perfil.moto, "Ex: Yamaha Fazer 150")
+        val cKml = campoNumero(form, "Quantos km a moto faz por litro", cfg.kml)
+        form.addView(texto(
+            "Não sabe? Valores aproximados na cidade: Pop 110 ≈ 50 · Biz 125 ≈ 45 · CG 160 ≈ 40 · Factor 150 ≈ 40 · Fazer 150 ≈ 35 · Bros 160 ≈ 35 · CB 300 ≈ 30",
+            12f, corMuted, false
+        ))
+        val cGas = campoNumero(form, "Preço da gasolina (R$ por litro)", cfg.gas)
+        val cMeta = campoNumero(form, "Quanto quer ganhar por dia (R$)", cfg.metaDia)
+        val cHoras = campoNumero(form, "Quantas horas quer trabalhar por dia", perfil.horas)
+        raiz.addView(card(form))
+
+        val previa = texto("", 15f, corTexto, true)
+        raiz.addView(card(previa))
+        fun num(e: EditText, padrao: Double) = e.text.toString().trim().replace(",", ".").toDoubleOrNull() ?: padrao
+        fun atualizarPrevia() {
+            val meta = num(cMeta, 0.0)
+            val horas = num(cHoras, 0.0)
+            val kml = num(cKml, 0.0)
+            val gas = num(cGas, 0.0)
+            val sb = StringBuilder()
+            if (meta > 0 && horas > 0) {
+                sb.append("Sua meta: ${Analisador.dinheiro(meta / horas)} por hora de lucro.\n")
+                sb.append("Entregas que pagam isso ficam 🟢 verdes.")
+            } else {
+                sb.append("Preencha a meta e as horas pra ver sua meta por hora.")
+            }
+            if (kml > 0 && gas > 0) {
+                sb.append("\n\nGasolina: ${Analisador.dinheiro(gas / kml)} por km.")
+            }
+            previa.text = sb.toString()
+        }
+        val ouvinte = object : android.text.TextWatcher {
+            override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(t: android.text.Editable?) { atualizarPrevia() }
+        }
+        listOf(cKml, cGas, cMeta, cHoras).forEach { it.addTextChangedListener(ouvinte) }
+        atualizarPrevia()
+
+        raiz.addView(botao("✓  Confirmar", corDestaque) {
+            val kml = num(cKml, 0.0)
+            val gas = num(cGas, 0.0)
+            val meta = num(cMeta, 0.0)
+            val horas = num(cHoras, 0.0)
+            val erro = when {
+                cNome.text.isBlank() -> "Digite seu nome."
+                cMoto.text.isBlank() -> "Digite sua moto."
+                kml <= 0 -> "Digite quantos km a moto faz por litro."
+                gas <= 0 -> "Digite o preço da gasolina."
+                meta <= 0 -> "Digite quanto quer ganhar por dia."
+                horas <= 0 || horas > 24 -> "Digite quantas horas quer trabalhar (de 1 a 24)."
+                else -> null
+            }
+            if (erro != null) {
+                Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
+                return@botao
+            }
+            Perfil.salvar(this, Perfil(cNome.text.toString().trim(), cMoto.text.toString().trim(), horas, true))
+            val metaHora = Math.round(meta / horas * 100) / 100.0
+            Config.salvar(this, Config.carregar(this).copy(kml = kml, gas = gas, metaDia = meta, metaHora = metaHora))
+            Toast.makeText(this, "Pronto! Sua meta é ${Analisador.dinheiro(metaHora)} por hora.", Toast.LENGTH_LONG).show()
+            campos.clear()
+            blocos.clear()
+            construirTela()
+            atualizarStatus()
+        })
+        if (perfil.feito) {
+            raiz.addView(botao("Cancelar", corBotao) {
+                campos.clear()
+                blocos.clear()
+                construirTela()
+                atualizarStatus()
+            })
+        }
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(corFundo)
+            addView(raiz)
+        })
+    }
+
+    private fun campoTexto(pai: LinearLayout, rotulo: String, valor: String, dica: String): EditText {
+        pai.addView(texto(rotulo, 13f, corMuted, false).apply { setPadding(0, dp(10), 0, dp(4)) })
+        val et = EditText(this).apply {
+            setText(valor)
+            hint = dica
+            setHintTextColor(Color.parseColor("#5B606B"))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setTextColor(corTexto)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#0B0D11"))
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), Color.parseColor("#2A2E38"))
+            }
+        }
+        pai.addView(et)
+        return et
+    }
+
+    private fun campoNumero(pai: LinearLayout, rotulo: String, valor: Double): EditText {
+        val chave = "cad_$rotulo"
+        campo(pai, chave, rotulo, valor)
+        return campos.remove(chave)!!
+    }
+
+    private fun construirTela() {
         val raiz = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(32))
@@ -207,6 +337,7 @@ class MainActivity : Activity() {
         }
         ajustesConteudo.addView(swTodos)
         ajustesConteudo.addView(botao("Salvar ajustes", corDestaque) { salvar() })
+        ajustesConteudo.addView(botao("✎  Editar cadastro (moto, meta, horas)", corBotao) { mostrarCadastro() })
         ajustesConteudo.addView(botao("Voltar ao padrão", corBotao) { padrao() })
         val ajustesBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -301,7 +432,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v0.8\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v0.9\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
@@ -334,6 +465,8 @@ class MainActivity : Activity() {
     }
 
     private fun atualizarStatus() {
+        if (!::hojeValor.isInitialized || !::stLeitor.isInitialized) return
+        if (hojeValor.parent == null && stLeitor.parent == null) return
         val leitor = Estado.servico != null
         val imagem = CapturaService.instancia != null
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
@@ -687,7 +820,8 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         })
         textos.addView(TextView(this).apply {
-            text = "Fazer 150 · Entrega Moto"
+            val pf = Perfil.carregar(this@MainActivity)
+            text = if (pf.feito) "${pf.nome} · ${pf.moto}" else "Entregas e corridas de moto"
             setTextColor(Color.parseColor("#5C4A00"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = Typeface.DEFAULT_BOLD
