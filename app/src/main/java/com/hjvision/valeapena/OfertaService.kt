@@ -121,7 +121,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         val ordenadas = linhas.sortedBy { it.caixa.top }
         val texto = ordenadas.joinToString("\n") { it.texto }
         Estado.ultimoOcr = texto.take(1200)
-        if (texto.contains("Aceitar", ignoreCase = true)) {
+        if (Analisador.temBotaoOferta(texto)) {
             Estado.diagOcr = texto.take(2500)
         }
         val achado = Analisador.extrairOcr(ordenadas) ?: return
@@ -144,6 +144,16 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         Estado.ultimaOferta = r
         horaUltimaOferta = agora
         anunciar(r)
+    }
+
+    /** Confere se a 99 ou a Uber estão na tela agora, sem depender dos avisos delas. */
+    fun appNaTela(): Boolean = try {
+        windows.any { w ->
+            val pkg = w.root?.packageName?.toString() ?: ""
+            pkg.isNotEmpty() && eh99(pkg)
+        }
+    } catch (e: Exception) {
+        false
     }
 
     /** Apps de entrega e corrida que o leitor acompanha: 99 e Uber (motorista). */
@@ -183,7 +193,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
             }
         }
-        if (!textos.toString().contains("Aceitar", ignoreCase = true) && !tocouNoBotao) return
+        if (!Analisador.temBotaoOferta(textos.toString()) && !tocouNoBotao) return
 
         val r = ultimaOferta ?: return
         if (agora - horaUltimaOferta > 90_000) return

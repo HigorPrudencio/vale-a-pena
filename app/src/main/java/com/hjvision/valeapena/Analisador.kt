@@ -255,7 +255,8 @@ object Analisador {
         val n = it.groupValues[1].replace(",", ".").toDoubleOrNull() ?: return@mapNotNull null
         if (it.groupValues[2].equals("m", ignoreCase = true)) n / 1000.0 else n
     }.toList()
-    private val reMin = Regex("""(\d+)\s*min\b""", RegexOption.IGNORE_CASE)
+    /** "15 min", "15min" e "16 minutos" (a Uber escreve por extenso). */
+    private val reMin = Regex("""(\d+)\s*min(?:uto|utos)?\b""", RegexOption.IGNORE_CASE)
 
     /**
      * Lê o texto da tela. Só considera oferta se tiver botão Aceitar, valor em R$ e km.
@@ -282,7 +283,14 @@ object Analisador {
         )
     }
 
-    private val reValorOcr = Regex("""R\s?[${'$'}S5]\s?(\d{1,3}(?:[.\s]\d{3})*[,.]\d{2})""")
+    /** "R$ 15,05", "R$15.05" e "R$ 10" (a Uber às vezes mostra sem centavos). */
+    private val reValorOcr = Regex("""R\s?[${'$'}S5]\s?(\d{1,3}(?:\.\d{3})+|\d+)(?:[,.](\d{2}))?(?!\d)""")
+
+    /** Botões que aparecem nas ofertas: "Aceitar" (99 e Uber) e "Tenho interesse" (Uber). */
+    private fun ehBotaoOferta(t: String): Boolean =
+        t.contains("Aceitar", ignoreCase = true) || t.contains("Tenho interesse", ignoreCase = true)
+
+    fun temBotaoOferta(t: String): Boolean = ehBotaoOferta(t)
 
     /** Textos da faixa do próprio app, que também aparecem na imagem. */
     private fun ehNosso(t: String): Boolean =
@@ -295,7 +303,7 @@ object Analisador {
      * Devolve a oferta e a posição do botão Aceitar na tela.
      */
     fun extrairOcr(linhas: List<Linha>): Pair<Oferta, Rect>? {
-        val aceitar = linhas.lastOrNull { it.texto.contains("Aceitar", ignoreCase = true) } ?: return null
+        val aceitar = linhas.lastOrNull { ehBotaoOferta(it.texto) } ?: return null
         val acima = linhas
             .filter { it.caixa.top < aceitar.caixa.top && !ehNosso(it.texto) }
             .sortedBy { it.caixa.top }
@@ -311,9 +319,10 @@ object Analisador {
         }
         val preco = melhor ?: return null
         val m = melhorMatch ?: return null
-        val digitos = m.groupValues[1].filter { it.isDigit() }
-        if (digitos.length < 3) return null
-        val valor = (digitos.toLongOrNull() ?: return null) / 100.0
+        val reais = m.groupValues[1].filter { it.isDigit() }.toLongOrNull() ?: return null
+        val centavos = m.groupValues[2].toLongOrNull() ?: 0L
+        val valor = reais + centavos / 100.0
+        if (valor <= 0) return null
 
         val abaixo = acima.filter { it.caixa.top > preco.caixa.top }.joinToString("\n") { it.texto }
         val kms = distancias(abaixo)

@@ -52,12 +52,17 @@ class CapturaService : Service() {
 
     @Volatile private var ocupado = false
     private var ultimoPedido = 0L
+    @Volatile private var inicioLeitura = 0L
 
     /** Lê a tela uma vez por segundo enquanto a 99 apareceu nos últimos 5 segundos. */
     private val ciclo = object : Runnable {
         override fun run() {
             val agora = SystemClock.uptimeMillis()
-            if (agora - Estado.visto99 < 8000) pedirLeitura()
+            // Se travou esperando uma leitura por muito tempo, libera de novo
+            if (ocupado && agora - inicioLeitura > 6000) ocupado = false
+            val naTela = Estado.servico?.appNaTela() ?: false
+            if (naTela) Estado.visto99 = agora
+            if (naTela || agora - Estado.visto99 < 8000) pedirLeitura()
             principal.postDelayed(this, 500)
         }
     }
@@ -158,6 +163,7 @@ class CapturaService : Service() {
         val agora = SystemClock.uptimeMillis()
         if (ocupado || agora - ultimoPedido < 400) return
         ultimoPedido = agora
+        inicioLeitura = agora
         ocupado = true
         fundo.post {
             val corte = try {
@@ -171,7 +177,13 @@ class CapturaService : Service() {
             }
             val bmp = corte.first
             val topo = corte.second
-            reconhecedor.process(InputImage.fromBitmap(bmp, 0))
+            val tarefa = try {
+                reconhecedor.process(InputImage.fromBitmap(bmp, 0))
+            } catch (e: Exception) {
+                ocupado = false
+                return@post
+            }
+            tarefa
                 .addOnSuccessListener { resultado ->
                     try {
                         val linhas = ArrayList<Linha>()
