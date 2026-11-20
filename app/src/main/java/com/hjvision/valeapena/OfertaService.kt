@@ -1,6 +1,7 @@
 package com.hjvision.valeapena
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -93,6 +94,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (eh99) {
             Estado.visto99 = agora
             CapturaService.instancia?.pedirLeitura()
+            if (CapturaService.instancia == null) lembrarLeitura(agora)
         }
 
         if (agora - ultimaLeitura < 300) return
@@ -150,6 +152,82 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         Estado.ultimaOferta = r
         horaUltimaOferta = agora
         anunciar(r)
+    }
+
+    private var ultimoLembrete = 0L
+    private var lembrete: View? = null
+
+    /**
+     * A 99 ou a Uber estão abertas, mas a leitura por imagem está desligada
+     * (por exemplo, depois de reiniciar o celular). Mostra um aviso pra ligar.
+     * Aparece no máximo uma vez a cada 3 minutos.
+     */
+    private fun lembrarLeitura(agora: Long) {
+        if (agora - ultimoLembrete < 180_000) return
+        ultimoLembrete = agora
+        handler.post { mostrarLembrete() }
+        if (cfg.voz && ttsPronto) {
+            tts?.speak("Vale a Pena desligado. Toque no aviso para ligar.", TextToSpeech.QUEUE_FLUSH, null, "lembrete")
+        }
+    }
+
+    private fun mostrarLembrete() {
+        val gerenciador = wm ?: return
+        removerLembrete()
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = redondo(Color.parseColor("#F2121418"), 18, 2, Color.parseColor("#F5A524"))
+            setOnClickListener {
+                removerLembrete()
+                try {
+                    startActivity(
+                        Intent(this@OfertaService, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            .putExtra(MainActivity.EXTRA_LIGAR_IMAGEM, true)
+                    )
+                } catch (e: Exception) {
+                }
+            }
+        }
+        caixa.addView(txt("⚠", 24f, Color.parseColor("#F5A524"), true).apply { setPadding(0, 0, dp(12), 0) })
+        val textos = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        textos.addView(txt("Leitura por imagem desligada", 15f, Color.parseColor("#F2F3F5"), true))
+        textos.addView(txt("Toque aqui para ligar o Vale a Pena", 13f, Color.parseColor("#9AA0AB")).apply {
+            setPadding(0, dp(4), 0, 0)
+        })
+        caixa.addView(textos)
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP
+            y = dp(44)
+            horizontalMargin = 0.03f
+        }
+        try {
+            gerenciador.addView(caixa, params)
+            lembrete = caixa
+            handler.postDelayed({ removerLembrete() }, 12_000)
+        } catch (e: Exception) {
+            lembrete = null
+        }
+    }
+
+    private fun removerLembrete() {
+        val v = lembrete ?: return
+        try {
+            wm?.removeView(v)
+        } catch (e: Exception) {
+        }
+        lembrete = null
     }
 
     /** Confere se a 99 ou a Uber estão na tela agora, sem depender dos avisos delas. */
@@ -473,6 +551,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        removerLembrete()
         removerFaixa()
         tts?.shutdown()
         if (Estado.servico === this) Estado.servico = null

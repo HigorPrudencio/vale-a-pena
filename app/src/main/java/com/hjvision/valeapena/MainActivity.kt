@@ -28,12 +28,14 @@ class MainActivity : Activity() {
 
     companion object {
         private const val PEDIDO_CAPTURA = 77
+        const val EXTRA_LIGAR_IMAGEM = "ligar_imagem"
     }
 
     private lateinit var status: TextView
     private lateinit var resultado: TextView
     private val campos = LinkedHashMap<String, EditText>()
     private lateinit var swVoz: Switch
+    private lateinit var swEconomia: Switch
 
     // Status da configuração
     private lateinit var stLeitor: TextView
@@ -70,7 +72,25 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = corFundo
-        if (Perfil.carregar(this).feito) construirTela() else mostrarCadastro()
+        if (Perfil.carregar(this).feito) {
+            construirTela()
+            pedidoDoAviso(intent)
+        } else {
+            mostrarCadastro()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (Perfil.carregar(this).feito) pedidoDoAviso(intent)
+    }
+
+    /** Veio do aviso "Leitura por imagem desligada": já pede pra ligar. */
+    private fun pedidoDoAviso(i: Intent?) {
+        if (i?.getBooleanExtra(EXTRA_LIGAR_IMAGEM, false) == true) {
+            i?.removeExtra(EXTRA_LIGAR_IMAGEM)
+            ligarImagem()
+        }
     }
 
     // ===== Cadastro (primeira vez e "Editar cadastro") =====
@@ -328,6 +348,13 @@ class MainActivity : Activity() {
             setPadding(0, dp(12), 0, dp(4))
         }
         ajustesConteudo.addView(swVoz)
+        swEconomia = Switch(this).apply {
+            text = "Economia de bateria (lê a tela a cada 1 segundo)"
+            setTextColor(corTexto)
+            isChecked = cfg.economia
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        ajustesConteudo.addView(swEconomia)
         ajustesConteudo.addView(botao("Salvar ajustes", corDestaque) { salvar() })
         ajustesConteudo.addView(botao("✎  Editar cadastro (moto, meta, horas)", corBotao) { mostrarCadastro() })
         ajustesConteudo.addView(botao("Voltar ao padrão", corBotao) { padrao() })
@@ -424,7 +451,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.3\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.4\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
@@ -682,6 +709,7 @@ class MainActivity : Activity() {
             metaDia = lerCampo("metaDia", p.metaDia),
             kmLonge = lerCampo("kmLonge", p.kmLonge),
             voz = swVoz.isChecked,
+            economia = swEconomia.isChecked,
             todosApps = false
         )
     }
@@ -702,6 +730,7 @@ class MainActivity : Activity() {
         campos["tempoExtra"]?.setText(fmt(p.tempoExtra))
         campos["kmLonge"]?.setText(fmt(p.kmLonge))
         swVoz.isChecked = p.voz
+        swEconomia.isChecked = p.economia
         Config.salvar(this, p)
         Toast.makeText(this, "Ajustes padrão", Toast.LENGTH_SHORT).show()
     }

@@ -17,6 +17,7 @@ data class Config(
     val metaDia: Double,
     val kmLonge: Double,
     val voz: Boolean,
+    val economia: Boolean = false,
     val todosApps: Boolean
 ) {
     companion object {
@@ -39,7 +40,8 @@ data class Config(
                 metaDia = f("metaDia", PADRAO.metaDia),
                 kmLonge = f("kmLonge", PADRAO.kmLonge),
                 voz = p.getBoolean("voz", PADRAO.voz),
-                todosApps = p.getBoolean("todosApps", PADRAO.todosApps)
+                todosApps = p.getBoolean("todosApps", PADRAO.todosApps),
+                economia = p.getBoolean("economia", false)
             )
         }
 
@@ -55,6 +57,7 @@ data class Config(
                 .putFloat("kmLonge", cfg.kmLonge.toFloat())
                 .putBoolean("voz", cfg.voz)
                 .putBoolean("todosApps", cfg.todosApps)
+                .putBoolean("economia", cfg.economia)
                 .apply()
         }
     }

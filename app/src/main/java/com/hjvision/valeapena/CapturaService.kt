@@ -53,6 +53,19 @@ class CapturaService : Service() {
     @Volatile private var ocupado = false
     private var ultimoPedido = 0L
     @Volatile private var inicioLeitura = 0L
+    private var economiaLidaEm = 0L
+    private var economiaCache = false
+
+    /** Modo economia de bateria: lê a tela a cada 1 segundo em vez de meio segundo. */
+    private val economia: Boolean
+        get() {
+            val agora = SystemClock.uptimeMillis()
+            if (agora - economiaLidaEm > 3000) {
+                economiaCache = Config.carregar(this).economia
+                economiaLidaEm = agora
+            }
+            return economiaCache
+        }
 
     /** Lê a tela uma vez por segundo enquanto a 99 apareceu nos últimos 5 segundos. */
     private val ciclo = object : Runnable {
@@ -63,7 +76,7 @@ class CapturaService : Service() {
             val naTela = Estado.servico?.appNaTela() ?: false
             if (naTela) Estado.visto99 = agora
             if (naTela || agora - Estado.visto99 < 8000) pedirLeitura()
-            principal.postDelayed(this, 500)
+            principal.postDelayed(this, if (economia) 1000L else 500L)
         }
     }
 
@@ -161,7 +174,7 @@ class CapturaService : Service() {
     /** Chamado pelo leitor de acessibilidade quando a tela da 99 muda. */
     fun pedirLeitura() {
         val agora = SystemClock.uptimeMillis()
-        if (ocupado || agora - ultimoPedido < 400) return
+        if (ocupado || agora - ultimoPedido < (if (economia) 900 else 400)) return
         ultimoPedido = agora
         inicioLeitura = agora
         ocupado = true

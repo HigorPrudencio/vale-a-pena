@@ -11,8 +11,8 @@ android {
         applicationId = "com.hjvision.valeapena"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "1.3"
+        versionCode = 14
+        versionName = "1.4"
     }
 
     // Chave da versão oficial: fica guardada em segredo no GitHub (Settings > Secrets).
