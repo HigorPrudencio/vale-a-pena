@@ -280,7 +280,7 @@ class MainActivity : Activity() {
         acoes.addView(botaoPequeno("Zerar") { zerar() })
         hoje.addView(acoes)
         hoje.addView(texto(
-            "Soma sozinho quando você toca em Aceitar na 99 ou na Uber. Use \"+ Somar\" se ele não somar e \"Desfazer\" se a entrega for cancelada.",
+            "Quando a oferta some, o app pergunta se você aceitou e soma aqui. Use \"+ Somar\" se ele não somar e \"Desfazer\" se a entrega for cancelada.",
             12f, corMuted, false
         ).apply { setPadding(0, dp(8), 0, 0) })
         raiz.addView(card(hoje))
@@ -455,7 +455,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.6\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.7\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +

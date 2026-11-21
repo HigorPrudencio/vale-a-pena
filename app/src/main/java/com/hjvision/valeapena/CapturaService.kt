@@ -59,6 +59,7 @@ class CapturaService : Service() {
     // Resumo da última imagem lida, para não ler de novo quando a tela não mudou
     private var ultimoResumo: IntArray? = null
     private var ultimaLeituraFeita = 0L
+    private var ultimaEstrutura = 0
     private var economiaLidaEm = 0L
     private var economiaCache = false
 
@@ -172,6 +173,13 @@ class CapturaService : Service() {
     fun pedirLeitura() {
         val agora = SystemClock.uptimeMillis()
         if (ocupado || agora - ultimoPedido < (if (economia) 1400 else 500)) return
+        // Economia: se a estrutura da tela da 99/Uber não mudou (só o mapa se mexeu) e não tem oferta
+        // aberta, espera mais pra ler. Sempre lê enquanto uma oferta está na tela.
+        val ofertaAberta = agora - Estado.horaOfertaVista < 5000
+        val estrutura = Estado.servico?.assinaturaEstrutura() ?: 0
+        val intervaloSemMudanca = if (economia) 5000L else 2500L
+        if (!ofertaAberta && estrutura == ultimaEstrutura && agora - ultimaLeituraFeita < intervaloSemMudanca) return
+        ultimaEstrutura = estrutura
         ultimoPedido = agora
         inicioLeitura = agora
         ocupado = true
@@ -243,7 +251,8 @@ class CapturaService : Service() {
             val resumo = resumir(recorte)
             val anterior = ultimoResumo
             val agora = SystemClock.uptimeMillis()
-            if (anterior != null && agora - ultimaLeituraFeita < 4000 && parecido(anterior, resumo)) {
+            val ofertaAberta = agora - Estado.horaOfertaVista < 5000
+            if (!ofertaAberta && anterior != null && agora - ultimaLeituraFeita < 4000 && parecido(anterior, resumo)) {
                 recorte.recycle()
                 return null
             }

@@ -296,8 +296,16 @@ object Analisador {
     fun temBotaoOferta(t: String): Boolean = ehBotaoOferta(t)
 
     /** Textos da faixa do próprio app, que também aparecem na imagem. */
+    /**
+     * Linhas que não são o preço da oferta: textos do próprio cartão do app e valores pequenos
+     * da 99 e da Uber ("+R$ 1,00 incluído", "R$ 2,42 Tarifa base", "Est. de R$ 1,09/km").
+     */
     private fun ehNosso(t: String): Boolean =
-        t.contains("/km") || t.contains("/h") || t.contains("Hoje:") || t.contains("lucro", ignoreCase = true)
+        t.contains("/km") || t.contains("/h") || t.contains("Hoje:") || t.contains("lucro", ignoreCase = true) ||
+            t.contains("inclu", ignoreCase = true) || t.contains("Tarifa", ignoreCase = true) ||
+            t.contains("Taxa", ignoreCase = true) || t.contains("+R") || t.contains("Est.", ignoreCase = true) ||
+            t.contains("Ganho", ignoreCase = true) || t.contains("Saldo", ignoreCase = true) ||
+            t.contains("Prejuízo", ignoreCase = true)
 
     /**
      * Lê a oferta a partir das linhas da imagem (OCR).
@@ -325,11 +333,13 @@ object Analisador {
         val reais = m.groupValues[1].filter { it.isDigit() }.toLongOrNull() ?: return null
         val centavos = m.groupValues[2].toLongOrNull() ?: 0L
         val valor = reais + centavos / 100.0
-        if (valor <= 0) return null
+        // Descarta leituras impossíveis (ex.: pegou um valor pequeno da tela por engano)
+        if (valor < 3.0 || valor > 500.0) return null
 
         val abaixo = acima.filter { it.caixa.top > preco.caixa.top }.joinToString("\n") { it.texto }
         val kms = distancias(abaixo)
         if (kms.isEmpty()) return null
+        if (kms.sum() < 0.2 || kms.sum() > 120.0) return null
         val mins = reMin.findAll(abaixo).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
         val oferta = Oferta(
             valor = valor,

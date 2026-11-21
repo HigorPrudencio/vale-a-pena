@@ -37,6 +37,7 @@ object Estado {
     @Volatile var aceitarRect: Rect? = null
     @Volatile var diagOcr: String = ""
     @Volatile var faixaRect: Rect? = null
+    @Volatile var horaOfertaVista: Long = 0L
     @Volatile var leiturasOcr: Int = 0
     @Volatile var visto99: Long = 0L
     @Volatile var ultimoOcr: String = ""
@@ -132,18 +133,115 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (Analisador.temBotaoOferta(texto)) {
             Estado.diagOcr = texto.take(2500)
         }
-        val achado = Analisador.extrairOcr(ordenadas) ?: return
+        val achado = Analisador.extrairOcr(ordenadas)
+        if (achado == null) {
+            verificarSumico()
+            return
+        }
+        leiturasSemOferta = 0
         Estado.aceitarRect = achado.second
         processarOferta(achado.first)
     }
 
+    private var leiturasSemOferta = 0
+    private var perguntada: Resultado? = null
+    private var pergunta: View? = null
+
+    /**
+     * A oferta sumiu da tela. Se o app não percebeu o toque em Aceitar,
+     * pergunta se a pessoa aceitou, pra somar certo no dia.
+     */
+    private fun verificarSumico() {
+        val r = ultimaOferta ?: return
+        if (Estado.ultimaSomada === r || perguntada === r) return
+        leiturasSemOferta++
+        val passou = SystemClock.uptimeMillis() - horaUltimaOferta
+        if (leiturasSemOferta >= 2 && passou in 1500..60_000) {
+            perguntada = r
+            handler.post {
+                removerFaixa()
+                mostrarPergunta(r)
+            }
+        }
+    }
+
+    private fun mostrarPergunta(r: Resultado) {
+        val gerenciador = wm ?: return
+        removerPergunta()
+        val branco = Color.parseColor("#F2F3F5")
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(12))
+            background = redondo(Color.parseColor("#F2121418"), 16, 2, Color.parseColor("#F5A524"))
+            minimumWidth = dp(170)
+        }
+        caixa.addView(txt("Aceitou essa entrega?", 15f, branco, true))
+        caixa.addView(txt("${Analisador.dinheiro(r.valor)} · ${Analisador.numero(r.km)} km", 13f, Color.parseColor("#9AA0AB")).apply {
+            setPadding(0, dp(4), 0, dp(10))
+        })
+        val botoes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun botao(t: String, cor: Int, primeiro: Boolean, acao: () -> Unit) {
+            botoes.addView(txt(t, 15f, Color.WHITE, true).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = redondo(cor, 10)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (!primeiro) leftMargin = dp(8)
+                }
+                setOnClickListener { acao() }
+            })
+        }
+        botao("✓ Sim", Color.parseColor("#22C55E"), true) {
+            removerPergunta()
+            somarAceite(r)
+        }
+        botao("✕ Não", Color.parseColor("#3A3F4A"), false) { removerPergunta() }
+        caixa.addView(botoes)
+
+        val prefs = getSharedPreferences("cartao", MODE_PRIVATE)
+        val alturaTela = resources.displayMetrics.heightPixels
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            val larguraTela = resources.displayMetrics.widthPixels
+            x = prefs.getInt("x", dp(8)).coerceIn(0, (larguraTela - dp(180)).coerceAtLeast(0))
+            y = prefs.getInt("y", (alturaTela * 0.18).toInt()).coerceIn(0, (alturaTela - dp(160)).coerceAtLeast(0))
+        }
+        try {
+            gerenciador.addView(caixa, params)
+            pergunta = caixa
+            caixa.post { guardarPosicao(caixa) }
+            handler.postDelayed({ removerPergunta() }, 15_000)
+        } catch (e: Exception) {
+            pergunta = null
+        }
+    }
+
+    private fun removerPergunta() {
+        val v = pergunta ?: return
+        try {
+            wm?.removeView(v)
+        } catch (e: Exception) {
+        }
+        pergunta = null
+        if (faixa == null) Estado.faixaRect = null
+    }
+
     private fun processarOferta(oferta: Oferta) {
         val agora = SystemClock.uptimeMillis()
+        Estado.horaOfertaVista = agora
         val assinatura = "${oferta.valor}|${oferta.kmColeta}|${oferta.kmEntrega}"
         if (assinatura == ultimaAssinatura && agora - horaAssinatura < 60_000) {
             horaUltimaOferta = agora
             return
         }
+        // Oferta nova: some a pergunta da anterior, se ainda estiver na tela
+        handler.post { removerPergunta() }
         ultimaAssinatura = assinatura
         horaAssinatura = agora
 
@@ -230,6 +328,33 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         lembrete = null
     }
 
+    /**
+     * Um "resumo" da estrutura das janelas da 99 e da Uber (posição das janelas e quantos itens têm).
+     * Muda quando aparece uma janela ou cartão novo, como o da oferta, mas não quando só o mapa se mexe.
+     */
+    fun assinaturaEstrutura(): Int = try {
+        var h = 17
+        for (w in windows) {
+            val raiz = w.root ?: continue
+            val pkg = raiz.packageName?.toString() ?: continue
+            if (!eh99(pkg)) continue
+            val b = Rect()
+            w.getBoundsInScreen(b)
+            h = h * 31 + b.hashCode()
+            h = h * 31 + contarItens(raiz, 0)
+        }
+        h
+    } catch (e: Exception) {
+        0
+    }
+
+    private fun contarItens(n: AccessibilityNodeInfo?, nivel: Int): Int {
+        if (n == null || nivel > 60) return 0
+        var total = 1
+        for (i in 0 until n.childCount) total += contarItens(n.getChild(i), nivel + 1)
+        return total
+    }
+
     /** Confere se a 99 ou a Uber estão na tela agora, sem depender dos avisos delas. */
     fun appNaTela(): Boolean = try {
         windows.any { w ->
@@ -280,6 +405,12 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         val r = ultimaOferta ?: return
         if (agora - horaUltimaOferta > 90_000) return
+        handler.post { removerPergunta() }
+        somarAceite(r)
+    }
+
+    /** Soma a entrega aceita no total do dia e fala quanto já fez. */
+    private fun somarAceite(r: Resultado) {
         if (Estado.ultimaSomada === r) return
         Estado.ultimaSomada = r
 
@@ -422,7 +553,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
         // R$ por hora em destaque
         val h = r.porHora
         if (h != null) {
-            cartao.addView(txt("R$ ${Math.round(h)}/h", 22f, branco, true).apply {
+            cartao.addView(txt(if (h < 0) "Prejuízo" else "R$ ${Math.round(h)}/h", 22f, branco, true).apply {
                 setPadding(0, dp(8), 0, 0)
             })
             cartao.addView(txt("meta R$ ${Math.round(cfg.metaHora)}/h", 11f, cinza).apply {
@@ -553,6 +684,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        removerPergunta()
         removerLembrete()
         removerFaixa()
         tts?.shutdown()
