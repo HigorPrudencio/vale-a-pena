@@ -315,8 +315,14 @@ object Analisador {
      */
     fun extrairOcr(linhas: List<Linha>): Pair<Oferta, Rect>? {
         val aceitar = linhas.lastOrNull { ehBotaoOferta(it.texto) } ?: return null
+        // Radar de Viagens da Uber: várias ofertas empilhadas, cada uma com o seu botão.
+        // Lê só o cartão desta oferta: o que fica entre o botão de cima (se houver) e este botão.
+        val botaoDeCima = linhas
+            .filter { ehBotaoOferta(it.texto) && it.caixa.bottom <= aceitar.caixa.top }
+            .maxByOrNull { it.caixa.bottom }
+        val limite = botaoDeCima?.caixa?.bottom ?: Int.MIN_VALUE
         val acima = linhas
-            .filter { it.caixa.top < aceitar.caixa.top && !ehNosso(it.texto) }
+            .filter { it.caixa.top < aceitar.caixa.top && it.caixa.top > limite && !ehNosso(it.texto) }
             .sortedBy { it.caixa.top }
         var melhor: Linha? = null
         var melhorMatch: MatchResult? = null

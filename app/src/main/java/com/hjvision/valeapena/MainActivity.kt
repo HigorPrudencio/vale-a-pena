@@ -455,7 +455,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.7\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.8\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
