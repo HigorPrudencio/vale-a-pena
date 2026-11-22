@@ -18,6 +18,7 @@ data class Config(
     val kmLonge: Double,
     val voz: Boolean,
     val economia: Boolean = false,
+    val perguntar: Boolean = false,
     val todosApps: Boolean
 ) {
     companion object {
@@ -41,7 +42,8 @@ data class Config(
                 kmLonge = f("kmLonge", PADRAO.kmLonge),
                 voz = p.getBoolean("voz", PADRAO.voz),
                 todosApps = p.getBoolean("todosApps", PADRAO.todosApps),
-                economia = p.getBoolean("economia", false)
+                economia = p.getBoolean("economia", false),
+                perguntar = p.getBoolean("perguntar", false)
             )
         }
 
@@ -58,6 +60,7 @@ data class Config(
                 .putBoolean("voz", cfg.voz)
                 .putBoolean("todosApps", cfg.todosApps)
                 .putBoolean("economia", cfg.economia)
+                .putBoolean("perguntar", cfg.perguntar)
                 .apply()
         }
     }
@@ -79,10 +82,13 @@ object Dia {
         val desgaste: Double,
         val entregas: Int,
         val inicio: Long,
-        val fim: Long
+        val fim: Long,
+        val horasManual: Double = 0.0,
+        val manual: Boolean = false
     ) {
-        /** Horas entre o primeiro aceite e o fim previsto da última entrega. */
-        val horas: Double get() = if (inicio > 0 && fim > inicio) (fim - inicio) / 3_600_000.0 else 0.0
+        /** Horas informadas pela pessoa; se não informou, horas entre o primeiro aceite e o fim da última entrega. */
+        val horas: Double get() = if (horasManual > 0) horasManual
+            else if (inicio > 0 && fim > inicio) (fim - inicio) / 3_600_000.0 else 0.0
         val porHora: Double? get() = if (horas > 0.05) lucro / horas else null
         val porKm: Double? get() = if (km > 0) valor / km else null
     }
@@ -109,7 +115,9 @@ object Dia {
             o.optDouble("desgaste", 0.0),
             o.optInt("entregas", 0),
             o.optLong("inicio", 0L),
-            o.optLong("fim", 0L)
+            o.optLong("fim", 0L),
+            o.optDouble("horasManual", 0.0),
+            o.optBoolean("manual", false)
         )
     }
 
@@ -122,6 +130,8 @@ object Dia {
         .put("entregas", t.entregas)
         .put("inicio", t.inicio)
         .put("fim", t.fim)
+        .put("horasManual", t.horasManual)
+        .put("manual", t.manual)
 
     fun ler(c: Context): Total {
         val d = hoje()
@@ -168,6 +178,36 @@ object Dia {
         gravar(c, j)
         p.edit().remove("anterior").remove("anteriorData").apply()
         return true
+    }
+
+    /**
+     * A pessoa informa o total do dia que a 99 e a Uber mostram (já sem os cancelamentos).
+     * Km e horas são opcionais: se vierem 0, mantém o que o app já tinha.
+     */
+    fun informar(c: Context, ganho: Double, km: Double, horas: Double, cfg: Config): Total {
+        val j = todos(c)
+        val d = hoje()
+        val atual = deJson(d, j.optJSONObject(d))
+        val kmFinal = if (km > 0) km else atual.km
+        val kml = if (cfg.kml > 0) cfg.kml else 1.0
+        val gasolina = kmFinal / kml * cfg.gas
+        val desgaste = kmFinal * cfg.desgaste
+        val novo = atual.copy(
+            valor = ganho,
+            km = kmFinal,
+            gasolina = gasolina,
+            desgaste = desgaste,
+            lucro = ganho - gasolina - desgaste,
+            horasManual = if (horas > 0) horas else atual.horasManual,
+            manual = true
+        )
+        c.getSharedPreferences("dia", Context.MODE_PRIVATE).edit()
+            .putString("anterior", paraJson(atual).toString())
+            .putString("anteriorData", d)
+            .apply()
+        j.put(d, paraJson(novo))
+        gravar(c, j)
+        return novo
     }
 
     fun zerarHoje(c: Context) {

@@ -152,6 +152,7 @@ class OfertaService : AccessibilityService(), TextToSpeech.OnInitListener {
      * pergunta se a pessoa aceitou, pra somar certo no dia.
      */
     private fun verificarSumico() {
+        if (!cfg.perguntar) return  // a pergunta é opcional (desligada por padrão)
         val r = ultimaOferta ?: return
         if (Estado.ultimaSomada === r || perguntada === r) return
         leiturasSemOferta++

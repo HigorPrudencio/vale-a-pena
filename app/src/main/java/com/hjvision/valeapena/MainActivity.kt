@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private val campos = LinkedHashMap<String, EditText>()
     private lateinit var swVoz: Switch
     private lateinit var swEconomia: Switch
+    private lateinit var swPerguntar: Switch
 
     // Status da configuração
     private lateinit var stLeitor: TextView
@@ -279,8 +280,9 @@ class MainActivity : Activity() {
         acoes.addView(botaoPequeno("Desfazer") { desfazer() })
         acoes.addView(botaoPequeno("Zerar") { zerar() })
         hoje.addView(acoes)
+        hoje.addView(botao("✎  Informar ganho do dia", corDestaque) { informarDia() })
         hoje.addView(texto(
-            "Quando a oferta some, o app pergunta se você aceitou e soma aqui. Use \"+ Somar\" se ele não somar e \"Desfazer\" se a entrega for cancelada.",
+            "No fim do dia, toque em \"Informar ganho do dia\" e digite o total que a 99 e a Uber mostram. Esse é o valor certo, já sem os cancelamentos.",
             12f, corMuted, false
         ).apply { setPadding(0, dp(8), 0, 0) })
         raiz.addView(card(hoje))
@@ -355,6 +357,13 @@ class MainActivity : Activity() {
             setPadding(0, dp(4), 0, dp(4))
         }
         ajustesConteudo.addView(swEconomia)
+        swPerguntar = Switch(this).apply {
+            text = "Perguntar \"Aceitou?\" quando a oferta some (só use parado)"
+            setTextColor(corTexto)
+            isChecked = cfg.perguntar
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        ajustesConteudo.addView(swPerguntar)
         ajustesConteudo.addView(botao("Salvar ajustes", corDestaque) { salvar() })
         ajustesConteudo.addView(botao("✎  Editar cadastro (moto, meta, horas)", corBotao) { mostrarCadastro() })
         ajustesConteudo.addView(botao("Voltar o cartão da oferta pro lugar inicial", corBotao) {
@@ -432,6 +441,48 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Janela pra digitar o total do dia que a 99 e a Uber mostram. */
+    private fun informarDia() {
+        val d = Dia.ler(this)
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun entrada(rotulo: String, valor: String): EditText {
+            caixa.addView(TextView(this).apply {
+                text = rotulo
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setPadding(0, dp(10), 0, dp(2))
+            })
+            val e = EditText(this).apply {
+                setText(valor)
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            }
+            caixa.addView(e)
+            return e
+        }
+        val eGanho = entrada("Quanto ganhou hoje (99 + Uber), em R$", if (d.valor > 0) fmt(d.valor) else "")
+        val eKm = entrada("Km rodados hoje (opcional, olhe o hodômetro)", if (d.km > 0) fmt(d.km) else "")
+        val eHoras = entrada("Horas trabalhadas (opcional)", if (d.horasManual > 0) fmt(d.horasManual) else "")
+        fun n(e: EditText) = e.text.toString().trim().replace(",", ".").toDoubleOrNull() ?: 0.0
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Ganho do dia")
+            .setMessage("Olhe o total de hoje no app da 99 e no da Uber e some. Esse valor já vem sem as corridas canceladas.")
+            .setView(caixa)
+            .setPositiveButton("Salvar") { _, _ ->
+                val ganho = n(eGanho)
+                if (ganho <= 0) {
+                    Toast.makeText(this, "Digite quanto ganhou hoje.", Toast.LENGTH_LONG).show()
+                } else {
+                    val t = Dia.informar(this, ganho, n(eKm), n(eHoras), Config.carregar(this))
+                    Toast.makeText(this, "Salvo. Lucro real: ${Analisador.dinheiro(t.lucro)}", Toast.LENGTH_LONG).show()
+                    atualizarStatus()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun desfazer() {
         if (Dia.desfazer(this)) {
             Estado.ultimaSomada = null
@@ -455,7 +506,7 @@ class MainActivity : Activity() {
     }
 
     private fun copiarDiagnostico() {
-        val t = "Vale a Pena v1.8\nEventos lidos da 99: ${Estado.eventos99}\n" +
+        val t = "Vale a Pena v1.9\nEventos lidos da 99: ${Estado.eventos99}\n" +
             "Leitura por imagem: ${if (CapturaService.instancia != null) "ligada" else "desligada"} · ${Estado.leiturasOcr} leituras\n\n" +
             "=== IMAGEM COM BOTÃO ACEITAR ===\n${Estado.diagOcr.ifBlank { "(nenhuma)" }}\n\n" +
             "=== ÚLTIMA IMAGEM LIDA ===\n${Estado.ultimoOcr.ifBlank { "(nenhuma)" }}\n\n" +
@@ -714,6 +765,7 @@ class MainActivity : Activity() {
             kmLonge = lerCampo("kmLonge", p.kmLonge),
             voz = swVoz.isChecked,
             economia = swEconomia.isChecked,
+            perguntar = swPerguntar.isChecked,
             todosApps = false
         )
     }
@@ -735,6 +787,7 @@ class MainActivity : Activity() {
         campos["kmLonge"]?.setText(fmt(p.kmLonge))
         swVoz.isChecked = p.voz
         swEconomia.isChecked = p.economia
+        swPerguntar.isChecked = p.perguntar
         Config.salvar(this, p)
         Toast.makeText(this, "Ajustes padrão", Toast.LENGTH_SHORT).show()
     }
